@@ -19,8 +19,8 @@ class StockRentalBooking(models.Model):
     partner_id = fields.Many2one('res.partner', string="Customer", check_company=True)
     project_id = fields.Many2one('project.project', string="Project", check_company=True)
     
-    date_start = fields.Datetime(string="Start Date", required=True, default=fields.Datetime.now, tracking=True)
-    date_end = fields.Datetime(string="End Date", required=True, tracking=True)
+    date_start = fields.Datetime(string="Start Date", default=fields.Datetime.now, tracking=True)
+    date_end = fields.Datetime(string="End Date", tracking=True)
     
     state = fields.Selection([
         ('draft', 'Draft'),
@@ -35,30 +35,31 @@ class StockRentalBooking(models.Model):
     
     notes = fields.Text(string="Notes")
 
-    @api.model
-    def create(self, vals):
-        if vals.get('name', _('New')) == _('New'):
-            vals['name'] = self.env['ir.sequence'].next_by_code('stock.rental.booking') or _('New')
-        return super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', _('New')) == _('New'):
+                vals['name'] = self.env['ir.sequence'].next_by_code('stock.rental.booking') or _('New')
+        return super().create(vals_list)
 
-    @api.constrains('date_start', 'date_end')
-    def _check_dates(self):
+    def action_confirm(self):
         for booking in self:
+            # Validate header fields only when confirming
+            if not booking.date_start:
+                raise ValidationError(_("Start date is required."))
+            if booking.date_start and not booking.date_end:
+                raise ValidationError(_("End date is required."))
             if booking.date_start and booking.date_end and booking.date_start > booking.date_end:
                 raise ValidationError(_("Start date cannot be after end date."))
-
-    @api.constrains('booking_type', 'partner_id', 'project_id')
-    def _check_booking_type_requirements(self):
-        for booking in self:
             if booking.booking_type == 'rental' and not booking.partner_id:
                 raise ValidationError(_("Customer is required for Rental bookings."))
             if booking.booking_type == 'project' and not booking.project_id:
                 raise ValidationError(_("Project is required for Project bookings."))
 
-    def action_confirm(self):
-        for booking in self:
-            # Check availability for all lines
+            # Ensure all lines are complete and available when confirming
             for line in booking.line_ids:
+                if not line.product_id:
+                    raise ValidationError(_("Each line must have a product before confirming a booking."))
                 line._check_line_availability()
             booking.state = 'reserved'
 
@@ -111,7 +112,7 @@ class StockRentalBookingLine(models.Model):
     booking_id = fields.Many2one('stock.rental.booking', string="Booking", required=True, ondelete="cascade")
     company_id = fields.Many2one(related='booking_id.company_id', store=True)
     
-    product_id = fields.Many2one('product.product', string="Product", required=True, check_company=True)
+    product_id = fields.Many2one('product.product', string="Product")
     quantity = fields.Float(string="Quantity", default=1.0, digits='Product Unit of Measure')
     
     date_start = fields.Datetime(related='booking_id.date_start', store=True)
