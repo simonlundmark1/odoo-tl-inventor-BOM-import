@@ -1,0 +1,9 @@
+<odoo>
+    <record id="seq_stock_rental_booking" model="ir.sequence">
+        <field name="name">Stock Rental Booking</field>
+        <field name="code">stock.rental.booking</field>
+        <field name="prefix">RENT/</field>
+        <field name="padding">4</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>

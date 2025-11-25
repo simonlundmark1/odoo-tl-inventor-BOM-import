@@ -1,0 +1,123 @@
+<odoo>
+    <!-- Actions -->
+    <record id="action_stock_rental_booking" model="ir.actions.act_window">
+        <field name="name">Rental Bookings</field>
+        <field name="res_model">stock.rental.booking</field>
+        <field name="view_mode">list,calendar,form</field>
+        <field name="context">{'search_default_current': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first rental booking!
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem id="menu_stock_rental_root" name="Rental" parent="stock.menu_stock_root" sequence="20"/>
+    <menuitem id="menu_stock_rental_booking" name="Bookings" parent="menu_stock_rental_root" action="action_stock_rental_booking" sequence="10"/>
+
+    <!-- List View -->
+    <record id="view_stock_rental_booking_list" model="ir.ui.view">
+        <field name="name">stock.rental.booking.list</field>
+        <field name="model">stock.rental.booking</field>
+        <field name="arch" type="xml">
+            <list decoration-info="state == 'draft'" decoration-warning="state == 'reserved'" decoration-success="state == 'ongoing'" decoration-muted="state in ('finished','returned','cancelled')">
+                <field name="name"/>
+                <field name="booking_type"/>
+                <field name="partner_id"/>
+                <field name="project_id"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state" widget="badge" 
+                       decoration-info="state == 'draft'" 
+                       decoration-warning="state == 'reserved'" 
+                       decoration-success="state == 'ongoing'" 
+                       decoration-muted="state in ('finished','returned','cancelled')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_stock_rental_booking_form" model="ir.ui.view">
+        <field name="name">stock.rental.booking.form</field>
+        <field name="model">stock.rental.booking</field>
+        <field name="arch" type="xml">
+            <form class="o_form_narrow">
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_mark_ongoing" string="Mark Ongoing" type="object" class="oe_highlight" invisible="state != 'reserved'"/>
+                    <button name="action_finish" string="Finish" type="object" invisible="state not in ('reserved', 'ongoing')"/>
+                    <button name="action_return" string="Return" type="object" class="oe_highlight" invisible="state != 'finished'"/>
+                    <button name="action_cancel" string="Cancel" type="object" invisible="state in ('returned', 'cancelled')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,reserved,ongoing,finished,returned"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="booking_type"/>
+                            <field name="partner_id" invisible="booking_type != 'rental'" required="booking_type == 'rental'"/>
+                            <field name="project_id" invisible="booking_type != 'project'" required="booking_type == 'project'"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="date_start" widget="datetime"/>
+                            <field name="date_end" widget="datetime"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Lines">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="product_id" options="{'no_create': True}" 
+                                           domain="[('type', '=', 'product'), ('rental_ok', '=', True), ('qty_available', '>', 0)]"/>
+                                    <field name="quantity"/>
+                                    <field name="date_start" column_invisible="1"/>
+                                    <field name="date_end" column_invisible="1"/>
+                                    <field name="state" column_invisible="1"/>
+                                    <field name="company_id" column_invisible="1"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Notes">
+                            <field name="notes"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Calendar View -->
+    <record id="view_stock_rental_booking_calendar" model="ir.ui.view">
+        <field name="name">stock.rental.booking.calendar</field>
+        <field name="model">stock.rental.booking</field>
+        <field name="arch" type="xml">
+            <calendar string="Rental Bookings" date_start="date_start" date_stop="date_end" mode="week" event_open_popup="true">
+                <field name="partner_id"/>
+                <field name="project_id"/>
+                <field name="booking_type"/>
+                <field name="state"/>
+            </calendar>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_stock_rental_booking_search" model="ir.ui.view">
+        <field name="name">stock.rental.booking.search</field>
+        <field name="model">stock.rental.booking</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="project_id"/>
+            </search>
+        </field>
+    </record>
+</odoo>

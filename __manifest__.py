@@ -1,25 +1,23 @@
 {
-    "name": "stock_rental_manager",
-    "summary": "Rent out products during a specific date range",
+    "name": "Stock Rental Manager",
+    "summary": "Manage stockable product rentals and project bookings with availability and calendar planning",
     "version": "19.0.1.0.0",
-    "author": "Simon Lundmark",
-
-    # Categories can be used to filter modules in modules listing
-    # Check https://github.com/odoo/odoo/blob/15.0/odoo/addons/base/data/ir_module_category_data.xml
-    # for the full list
-    "category": "Sales",
-
-    "depends": [
-        "base",
-        "product",
-        "sale",
-    ],
-
+    "author": "Me",
+    "website": "",
+    "category": "Inventory",
+    "depends": ["base", "product", "stock", "project"],
     "data": [
         "security/ir.model.access.csv",
-        "views/rental_order_views.xml",
+        "data/rental_sequence.xml",
+        "data/rental_cron.xml",
+        "views/product_view.xml",
+        "views/rental_booking_views.xml",
     ],
-
+    "assets": {
+        "web.assets_backend": [
+            "stock_rental_manager/static/src/js/rental_calendar.js",
+        ],
+    },
     "application": True,
     "installable": True,
     "license": "LGPL-3",
