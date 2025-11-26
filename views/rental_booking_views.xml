@@ -23,9 +23,9 @@
         <field name="arch" type="xml">
             <list decoration-info="state == 'draft'" decoration-warning="state == 'reserved'" decoration-success="state == 'ongoing'" decoration-muted="state in ('finished','returned','cancelled')">
                 <field name="name"/>
-                <field name="booking_type"/>
-                <field name="partner_id"/>
                 <field name="project_id"/>
+                <field name="source_warehouse_id"/>
+                <field name="rental_warehouse_id"/>
                 <field name="date_start"/>
                 <field name="date_end"/>
                 <field name="company_id" groups="base.group_multi_company"/>
@@ -60,9 +60,9 @@
                     </div>
                     <group>
                         <group>
-                            <field name="booking_type"/>
-                            <field name="partner_id" invisible="booking_type != 'rental'"/>
-                            <field name="project_id" invisible="booking_type != 'project'"/>
+                            <field name="project_id"/>
+                            <field name="source_warehouse_id"/>
+                            <field name="rental_warehouse_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group>
@@ -75,6 +75,8 @@
                             <field name="line_ids">
                                 <list editable="bottom">
                                     <field name="product_id"/>
+                                    <field name="source_warehouse_id"/>
+                                    <field name="rental_warehouse_id"/>
                                     <field name="quantity"/>
                                     <field name="date_start" column_invisible="1"/>
                                     <field name="date_end" column_invisible="1"/>
@@ -99,10 +101,9 @@
         <field name="model">stock.rental.booking</field>
         <field name="arch" type="xml">
             <calendar string="Rental Bookings" date_start="date_start" date_stop="date_end" mode="week" event_open_popup="true">
-                <field name="partner_id"/>
                 <field name="project_id"/>
-                <field name="booking_type"/>
                 <field name="state"/>
+                <field name="source_warehouse_id"/>
             </calendar>
         </field>
     </record>
@@ -114,7 +115,6 @@
         <field name="arch" type="xml">
             <search>
                 <field name="name"/>
-                <field name="partner_id"/>
                 <field name="project_id"/>
             </search>
         </field>

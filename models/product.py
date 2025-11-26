@@ -2,8 +2,6 @@ from odoo import models, fields, api
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
-
-    rental_ok = fields.Boolean(string="Can be Rented", default=False)
     
     rental_price_hour = fields.Monetary(string="Rental Price per Hour")
     rental_price_day = fields.Monetary(string="Rental Price per Day")
@@ -12,8 +10,6 @@ class ProductTemplate(models.Model):
     rental_min_hours = fields.Float(string="Min. Rental Hours", default=1.0)
     rental_min_days = fields.Float(string="Min. Rental Days", default=0.0)
     rental_min_weeks = fields.Float(string="Min. Rental Weeks", default=0.0)
-    
-    rental_total_units = fields.Integer(string="Total Rental Units", default=0, help="Total number of units available for rental/booking.")
     
     rental_reserved_units = fields.Integer(
         string="Reserved Units", 
@@ -40,19 +36,19 @@ class ProductTemplate(models.Model):
         ('unavailable', 'Unavailable'),
     ], string="Rental Status", compute="_compute_rental_status", store=False)
 
-    @api.depends('rental_total_units', 'rental_reserved_units', 'rental_rented_units')
+    @api.depends('rental_available_units', 'rental_reserved_units', 'rental_rented_units')
     def _compute_rental_status(self):
         for product in self:
-            if product.rental_total_units <= 0:
-                product.rental_status = 'unavailable'
-            elif product.rental_rented_units > 0:
+            if product.rental_rented_units > 0:
                 product.rental_status = 'rented'
             elif product.rental_reserved_units > 0:
                 product.rental_status = 'reserved'
+            elif product.rental_available_units <= 0:
+                product.rental_status = 'unavailable'
             else:
                 product.rental_status = 'available'
 
-    @api.depends('rental_total_units')  # Dependencies also need to trigger on booking changes, handled via triggers or manually?
+    @api.depends('product_variant_ids')  # Dependencies also need to trigger on booking changes, handled via triggers or manually?
     # In Odoo, we usually depend on a One2many relation or we have to trigger recomputation from the other side.
     # Since we don't have a direct One2many from product to booking lines here yet, we might need to 
     # rely on the booking lines touching the product to trigger recomputation if we add a relation, 
@@ -78,6 +74,7 @@ class ProductTemplate(models.Model):
         # This compute method needs to handle recomputation.
         # We will query stock.rental.booking.line.
         BookingLine = self.env['stock.rental.booking.line']
+        Quant = self.env['stock.quant']
         for product in self:
             # Get related product.product IDs
             product_variant_ids = product.product_variant_ids.ids
@@ -96,8 +93,23 @@ class ProductTemplate(models.Model):
                     reserved += line.quantity
                 elif line.state in ['ongoing', 'finished']:
                     rented += line.quantity
-            
+
+            # Compute a global stock-based capacity over all internal locations
+            base_capacity = 0.0
+            if product_variant_ids:
+                domain = [
+                    ('product_id', 'in', product_variant_ids),
+                    ('location_id.usage', '=', 'internal'),
+                    ('company_id', '=', self.env.company.id),
+                ]
+                groups = Quant.read_group(domain, ['quantity:sum', 'reserved_quantity:sum'], [])
+
+                if groups:
+                    quantity = groups[0].get('quantity_sum', 0.0) or 0.0
+                    reserved_qty = groups[0].get('reserved_quantity_sum', 0.0) or 0.0
+                    base_capacity = max(quantity - reserved_qty, 0.0)
+
             product.rental_reserved_units = reserved
             product.rental_rented_units = rented
-            product.rental_available_units = max(product.rental_total_units - reserved - rented, 0)
+            product.rental_available_units = max(base_capacity - reserved - rented, 0.0)
 

@@ -8,16 +8,48 @@ class StockRentalBooking(models.Model):
     _order = 'date_start desc, id desc'
 
     name = fields.Char(string="Booking Reference", required=True, copy=False, readonly=True, default=lambda self: _('New'))
-    
-    booking_type = fields.Selection([
-        ('rental', 'Rental'),
-        ('project', 'Project Booking')
-    ], string="Booking Type", default='rental', required=True)
-    
+
     company_id = fields.Many2one('res.company', string="Company", required=True, default=lambda self: self.env.company)
     
     partner_id = fields.Many2one('res.partner', string="Customer", check_company=True)
-    project_id = fields.Many2one('project.project', string="Project", check_company=True)
+    project_id = fields.Many2one('project.project', string="Project", check_company=True, required=True)
+
+    source_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string="Source Warehouse",
+        required=True,
+        check_company=True,
+    )
+    rental_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string="Rental Warehouse",
+        required=True,
+        check_company=True,
+    )
+
+    source_location_id = fields.Many2one(
+        'stock.location',
+        string="Source Location",
+        compute="_compute_locations",
+        store=False,
+    )
+    rental_location_id = fields.Many2one(
+        'stock.location',
+        string="Rental Location",
+        compute="_compute_locations",
+        store=False,
+    )
+    
+    def _compute_locations(self):
+        for booking in self:
+            source_location = False
+            rental_location = False
+            if booking.source_warehouse_id:
+                source_location = booking.source_warehouse_id.lot_stock_id
+            if booking.rental_warehouse_id:
+                rental_location = booking.rental_warehouse_id.lot_stock_id
+            booking.source_location_id = source_location
+            booking.rental_location_id = rental_location
     
     date_start = fields.Datetime(string="Start Date", default=fields.Datetime.now, tracking=True)
     date_end = fields.Datetime(string="End Date", tracking=True)
@@ -51,16 +83,18 @@ class StockRentalBooking(models.Model):
                 raise ValidationError(_("End date is required."))
             if booking.date_start and booking.date_end and booking.date_start > booking.date_end:
                 raise ValidationError(_("Start date cannot be after end date."))
-            if booking.booking_type == 'rental' and not booking.partner_id:
-                raise ValidationError(_("Customer is required for Rental bookings."))
-            if booking.booking_type == 'project' and not booking.project_id:
-                raise ValidationError(_("Project is required for Project bookings."))
+            if not booking.project_id:
+                raise ValidationError(_("Project is required for Rental bookings."))
 
             # Ensure all lines are complete and available when confirming
             for line in booking.line_ids:
                 if not line.product_id:
                     raise ValidationError(_("Each line must have a product before confirming a booking."))
+                if not line.source_warehouse_id or not line.rental_warehouse_id:
+                    raise ValidationError(_("Each line must have both Source Warehouse and Rental Warehouse set."))
                 line._check_line_availability()
+
+            booking._create_start_picking()
             booking.state = 'reserved'
 
     def action_mark_ongoing(self):
@@ -73,9 +107,8 @@ class StockRentalBooking(models.Model):
 
     def action_return(self):
         for booking in self:
+            booking._create_return_picking()
             booking.state = 'returned'
-            # Trigger availability recomputation? 
-            # The compute method on product depends on state, so it should update.
 
     def action_cancel(self):
         for booking in self:
@@ -88,21 +121,116 @@ class StockRentalBooking(models.Model):
     def _cron_update_booking_states(self):
         now = fields.Datetime.now()
         
-        # Reserved -> Ongoing
+        # Reserved -> should start
         bookings_to_start = self.search([
             ('state', '=', 'reserved'),
             ('date_start', '<=', now),
             ('date_end', '>', now)
         ])
-        bookings_to_start.action_mark_ongoing()
+        for booking in bookings_to_start:
+            booking.message_post(body=_("Rental booking %s should start based on its planned dates.") % booking.name)
         
-        # Reserved/Ongoing -> Finished
-        # Note: If it was reserved and expired without being ongoing, it finishes too.
+        # Reserved/Ongoing -> should be finished
         bookings_to_finish = self.search([
             ('state', 'in', ['reserved', 'ongoing']),
             ('date_end', '<=', now)
         ])
-        bookings_to_finish.action_finish()
+        for booking in bookings_to_finish:
+            booking.message_post(body=_("Rental booking %s has passed its end date and should be finished/returned.") % booking.name)
+
+    def _create_start_picking(self):
+        Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+        for booking in self:
+            lines_by_wh = {}
+            for line in booking.line_ids:
+                if not line.product_id or line.quantity <= 0:
+                    continue
+                if not line.source_warehouse_id or not line.rental_warehouse_id:
+                    continue
+                key = (line.source_warehouse_id.id, line.rental_warehouse_id.id)
+                lines_by_wh.setdefault(key, []).append(line)
+
+            for (source_wh_id, rental_wh_id), lines in lines_by_wh.items():
+                source_wh = self.env['stock.warehouse'].browse(source_wh_id)
+                rental_wh = self.env['stock.warehouse'].browse(rental_wh_id)
+                source_location = source_wh.lot_stock_id
+                rental_location = rental_wh.lot_stock_id
+                if not source_location or not rental_location:
+                    continue
+                picking_type = source_wh.int_type_id
+                if not picking_type:
+                    continue
+                picking_vals = {
+                    'picking_type_id': picking_type.id,
+                    'location_id': source_location.id,
+                    'location_dest_id': rental_location.id,
+                    'company_id': booking.company_id.id,
+                    'origin': booking.name,
+                    'rental_booking_id': booking.id,
+                    'rental_direction': 'out',
+                }
+                picking = Picking.create(picking_vals)
+                for line in lines:
+                    Move.create({
+                        'name': line.product_id.display_name or booking.name,
+                        'product_id': line.product_id.id,
+                        'product_uom': line.product_id.uom_id.id,
+                        'product_uom_qty': line.quantity,
+                        'picking_id': picking.id,
+                        'company_id': booking.company_id.id,
+                        'location_id': source_location.id,
+                        'location_dest_id': rental_location.id,
+                    })
+                picking.action_confirm()
+                picking.action_assign()
+
+    def _create_return_picking(self):
+        Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+        for booking in self:
+            lines_by_wh = {}
+            for line in booking.line_ids:
+                if not line.product_id or line.quantity <= 0:
+                    continue
+                if not line.source_warehouse_id or not line.rental_warehouse_id:
+                    continue
+                key = (line.source_warehouse_id.id, line.rental_warehouse_id.id)
+                lines_by_wh.setdefault(key, []).append(line)
+
+            for (source_wh_id, rental_wh_id), lines in lines_by_wh.items():
+                source_wh = self.env['stock.warehouse'].browse(source_wh_id)
+                rental_wh = self.env['stock.warehouse'].browse(rental_wh_id)
+                source_location = source_wh.lot_stock_id
+                rental_location = rental_wh.lot_stock_id
+                if not source_location or not rental_location:
+                    continue
+                picking_type = rental_wh.int_type_id
+                if not picking_type:
+                    continue
+                picking_vals = {
+                    'picking_type_id': picking_type.id,
+                    'location_id': rental_location.id,
+                    'location_dest_id': source_location.id,
+                    'company_id': booking.company_id.id,
+                    'origin': booking.name,
+                    'rental_booking_id': booking.id,
+                    'rental_direction': 'in',
+                }
+                picking = Picking.create(picking_vals)
+                for line in lines:
+                    Move.create({
+                        'name': line.product_id.display_name or booking.name,
+                        'product_id': line.product_id.id,
+                        'product_uom': line.product_id.uom_id.id,
+                        'product_uom_qty': line.quantity,
+                        'picking_id': picking.id,
+                        'company_id': booking.company_id.id,
+                        'location_id': rental_location.id,
+                        'location_dest_id': source_location.id,
+                    })
+                picking.action_confirm()
+                picking.action_assign()
 
 
 class StockRentalBookingLine(models.Model):
@@ -111,6 +239,10 @@ class StockRentalBookingLine(models.Model):
 
     booking_id = fields.Many2one('stock.rental.booking', string="Booking", required=True, ondelete="cascade")
     company_id = fields.Many2one(related='booking_id.company_id', store=True)
+    source_warehouse_id = fields.Many2one('stock.warehouse', string="Source Warehouse", check_company=True)
+    rental_warehouse_id = fields.Many2one('stock.warehouse', string="Rental Warehouse", check_company=True)
+    source_location_id = fields.Many2one('stock.location', string="Source Location", compute="_compute_locations", store=False)
+    rental_location_id = fields.Many2one('stock.location', string="Rental Location", compute="_compute_locations", store=False)
     
     product_id = fields.Many2one('product.product', string="Product")
     quantity = fields.Float(string="Quantity", default=1.0, digits='Product Unit of Measure')
@@ -120,44 +252,84 @@ class StockRentalBookingLine(models.Model):
     state = fields.Selection(related='booking_id.state', store=True)
 
     @api.onchange('booking_id')
-    def _onchange_booking_type_domain(self):
-        pass
+    def _onchange_booking_id(self):
+        for line in self:
+            if line.booking_id:
+                if not line.source_warehouse_id:
+                    line.source_warehouse_id = line.booking_id.source_warehouse_id
+                if not line.rental_warehouse_id:
+                    line.rental_warehouse_id = line.booking_id.rental_warehouse_id
+
+    def _compute_locations(self):
+        for line in self:
+            source_location = False
+            rental_location = False
+            if line.source_warehouse_id:
+                source_location = line.source_warehouse_id.lot_stock_id
+            if line.rental_warehouse_id:
+                rental_location = line.rental_warehouse_id.lot_stock_id
+            line.source_location_id = source_location
+            line.rental_location_id = rental_location
 
     def _check_line_availability(self):
         """
         Check if adding this line would exceed the product's rental_total_units
         during the booking period.
         """
+        Quant = self.env['stock.quant']
         for line in self:
             if not line.product_id or not line.date_start or not line.date_end:
                 continue
-            
+
             if line.quantity <= 0:
                 continue
 
-            total_units = line.product_id.product_tmpl_id.rental_total_units
-            
-            # Find overlapping bookings for the same product and company
-            # Overlap logic: StartA <= EndB AND EndA >= StartB
+            product = line.product_id
+            company = line.company_id or self.env.company
+
+            domain_quant = [
+                ('product_id', '=', product.id),
+                ('company_id', '=', company.id),
+            ]
+            if line.source_location_id:
+                domain_quant.append(('location_id', 'child_of', line.source_location_id.id))
+            else:
+                domain_quant.append(('location_id.usage', '=', 'internal'))
+
+            groups = Quant.read_group(domain_quant, ['quantity:sum', 'reserved_quantity:sum'], [])
+            if groups:
+                quantity = groups[0].get('quantity_sum', 0.0) or 0.0
+                reserved_qty = groups[0].get('reserved_quantity_sum', 0.0) or 0.0
+                base_capacity = quantity - reserved_qty
+            else:
+                base_capacity = 0.0
+
+            if base_capacity <= 0:
+                raise ValidationError(_(
+                    "No available stock for product '%s' in the selected warehouse."
+                ) % (product.display_name,))
+
             domain = [
                 ('id', '!=', line.id),
-                ('product_id', '=', line.product_id.id),
-                ('company_id', '=', line.company_id.id),
-                ('state', 'in', ['reserved', 'ongoing', 'finished']), # Finished items not returned count as occupied
+                ('product_id', '=', product.id),
+                ('company_id', '=', company.id if company else False),
+                ('state', 'in', ['reserved', 'ongoing']),
                 ('date_start', '<', line.date_end),
                 ('date_end', '>', line.date_start),
             ]
-            
+            if line.source_warehouse_id:
+                domain.append(('source_warehouse_id', '=', line.source_warehouse_id.id))
+
             overlapping_lines = self.search(domain)
             current_booked_qty = sum(overlapping_lines.mapped('quantity'))
-            
-            if current_booked_qty + line.quantity > total_units:
+
+            if current_booked_qty + line.quantity > base_capacity:
                 raise ValidationError(_(
                     "Not enough availability for product '%s' during this period.\n"
-                    "Total units: %s\n"
+                    "Available capacity: %s\n"
                     "Already booked: %s\n"
                     "Requested: %s"
-                ) % (line.product_id.display_name, total_units, current_booked_qty, line.quantity))
+                ) % (product.display_name, base_capacity, current_booked_qty, line.quantity))
 
     @api.constrains('product_id', 'date_start', 'date_end', 'state', 'company_id', 'quantity')
     def _constrains_check_availability(self):
