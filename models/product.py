@@ -105,8 +105,8 @@ class ProductTemplate(models.Model):
                 groups = Quant.read_group(domain, ['quantity:sum', 'reserved_quantity:sum'], [])
 
                 if groups:
-                    quantity = groups[0].get('quantity_sum', 0.0) or 0.0
-                    reserved_qty = groups[0].get('reserved_quantity_sum', 0.0) or 0.0
+                    quantity = groups[0].get('quantity', 0.0) or 0.0
+                    reserved_qty = groups[0].get('reserved_quantity', 0.0) or 0.0
                     base_capacity = max(quantity - reserved_qty, 0.0)
 
             product.rental_reserved_units = reserved

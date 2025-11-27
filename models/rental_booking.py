@@ -1,5 +1,9 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class StockRentalBooking(models.Model):
     _name = 'stock.rental.booking'
@@ -173,7 +177,6 @@ class StockRentalBooking(models.Model):
                 picking = Picking.create(picking_vals)
                 for line in lines:
                     Move.create({
-                        'name': line.product_id.display_name or booking.name,
                         'product_id': line.product_id.id,
                         'product_uom': line.product_id.uom_id.id,
                         'product_uom_qty': line.quantity,
@@ -220,7 +223,6 @@ class StockRentalBooking(models.Model):
                 picking = Picking.create(picking_vals)
                 for line in lines:
                     Move.create({
-                        'name': line.product_id.display_name or booking.name,
                         'product_id': line.product_id.id,
                         'product_uom': line.product_id.uom_id.id,
                         'product_uom_qty': line.quantity,
@@ -289,20 +291,28 @@ class StockRentalBookingLine(models.Model):
 
             domain_quant = [
                 ('product_id', '=', product.id),
-                ('company_id', '=', company.id),
+                ('company_id', '=', company.id if company else False),
+                ('location_id.usage', '=', 'internal'),
             ]
-            if line.source_location_id:
-                domain_quant.append(('location_id', 'child_of', line.source_location_id.id))
-            else:
-                domain_quant.append(('location_id.usage', '=', 'internal'))
 
+            logger.warning("RENTAL AVAIL DEBUG domain_quant=%s", domain_quant)
             groups = Quant.read_group(domain_quant, ['quantity:sum', 'reserved_quantity:sum'], [])
+            logger.warning("RENTAL AVAIL DEBUG groups=%s", groups)
             if groups:
-                quantity = groups[0].get('quantity_sum', 0.0) or 0.0
-                reserved_qty = groups[0].get('reserved_quantity_sum', 0.0) or 0.0
+                quantity = groups[0].get('quantity', 0.0) or 0.0
+                reserved_qty = groups[0].get('reserved_quantity', 0.0) or 0.0
                 base_capacity = quantity - reserved_qty
+                logger.warning(
+                    "RENTAL AVAIL DEBUG product=%s company=%s quantity=%s reserved=%s base_capacity=%s",
+                    product.id,
+                    company.id if company else None,
+                    quantity,
+                    reserved_qty,
+                    base_capacity,
+                )
             else:
                 base_capacity = 0.0
+                logger.warning("RENTAL AVAIL DEBUG no quants found for domain %s", domain_quant)
 
             if base_capacity <= 0:
                 raise ValidationError(_(
@@ -317,9 +327,6 @@ class StockRentalBookingLine(models.Model):
                 ('date_start', '<', line.date_end),
                 ('date_end', '>', line.date_start),
             ]
-            if line.source_warehouse_id:
-                domain.append(('source_warehouse_id', '=', line.source_warehouse_id.id))
-
             overlapping_lines = self.search(domain)
             current_booked_qty = sum(overlapping_lines.mapped('quantity'))
 
