@@ -97,22 +97,23 @@ export class TlrmAvailabilityAction extends Component {
         const row = this.rows.find(r => r.product_id === productId);
         const productName = row ? row.display_name : 'Product';
         
+        // Open bookings (not lines) that have this product in their lines
+        // and overlap with the selected period
         this.action.doAction({
             type: "ir.actions.act_window",
             name: `Bookings: ${productName} (${columnKey})`,
-            res_model: "tl.rental.booking.line",
+            res_model: "tl.rental.booking",
             view_mode: "list,form",
             views: [[false, "list"], [false, "form"]],
             target: "current",
             domain: [
-                ["product_id", "=", productId],
+                ["line_ids.product_id", "=", productId],
                 ["state", "in", ["reserved", "ongoing"]],
                 ["date_start", "<", endDate],
                 ["date_end", ">", startDate],
             ],
             context: {
                 create: false,
-                edit: false,
             },
         });
     }

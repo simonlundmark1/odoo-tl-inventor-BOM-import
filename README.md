@@ -41,10 +41,13 @@ tl_rental_manager/
 │       ├── css/
 │       │   └── rental_availability.css   # Availability grid styles
 │       ├── js/
-│       │   ├── rental_availability_action.js  # OWL client action
-│       │   └── rental_calendar.js             # Calendar view patch
+│       │   ├── booking_availability_action.js   # Booking wizard action handler
+│       │   ├── booking_availability_wizard.js   # OWL booking availability wizard
+│       │   ├── rental_availability_action.js    # OWL global availability grid
+│       │   └── rental_calendar.js               # Calendar view patch
 │       └── xml/
-│           └── rental_availability_templates.xml  # OWL templates
+│           ├── booking_availability_wizard_templates.xml  # Wizard templates
+│           └── rental_availability_templates.xml          # Grid templates
 └── views/
     ├── product_view.xml              # Product form extensions
     └── rental_booking_views.xml      # Booking views, menus, actions
@@ -61,7 +64,7 @@ This module follows Odoo 19 community guidelines with unique prefixes:
 | XML IDs | `tlrm_` | `tlrm_action_booking`, `tlrm_view_booking_form` |
 | Security groups | `tlrm_group_` | `tlrm_group_user`, `tlrm_group_manager` |
 | CSS classes | `o_tlrm_` | `o_tlrm_availability_action`, `o_tlrm_cell_clickable` |
-| Client action tags | `tlrm_` | `tlrm_availability_global` |
+| Client action tags | `tlrm_` | `tlrm_availability_global`, `tlrm_open_booking_availability_wizard` |
 | Sequence prefix | `TLRM/` | `TLRM/00001` |
 
 ## Security Groups
@@ -93,12 +96,25 @@ Booking lines with:
 The availability grid (`Inventory → Rental → Availability`) provides:
 
 - Week-by-week view of product availability (12 weeks at a time)
-- Color-coded cells: green (free), yellow (partial), red (full)
+- Gradient color-coded cells: green (0% booked) → yellow (75% booked) → red (100% booked)
 - Click booked cells to drill-down to booking lines
 - Search bar for filtering products by name/code
 - Sortable product column (A-Z / Z-A)
 - Week navigation (Previous / Today / Next)
 - Hover effects on clickable cells
+
+## Booking Availability Wizard
+
+When creating a booking, use the **Check Availability** button to:
+
+- View availability for all products in the booking lines
+- Toggle between week and day views
+- Click and drag to select a date range
+- See per-product availability validation (green = fits, red = doesn't fit)
+- Get a summary showing how many products fit the selected period
+- Apply selected dates to the booking with one click
+
+The wizard helps ensure all products are available before confirming a booking.
 
 ## Configuration
 
@@ -111,15 +127,18 @@ The availability grid (`Inventory → Rental → Availability`) provides:
 ## Usage
 
 1. Go to **Inventory → Rental → Bookings**
-2. Create a new booking with project, dates, and warehouse
+2. Create a new booking with project and warehouse
 3. Add booking lines with products and quantities
-4. Confirm to reserve stock
-5. Use **Availability** view to check capacity across all products
+4. Click **Check Availability** to find available dates for all products
+5. Select a date range and click **Apply Dates**
+6. Confirm to reserve stock
+7. Use **Availability** view to check capacity across all products
 
 ## Technical Details
 
 - **Availability computation**: `tl.rental.booking.line.get_availability_grid()`
-- **OWL client action**: `static/src/js/rental_availability_action.js`
+- **Global availability grid**: `static/src/js/rental_availability_action.js`
+- **Booking availability wizard**: `static/src/js/booking_availability_wizard.js`
 - **Controller endpoints**:
   - `/tlrm/availability_grid/global`
   - `/tlrm/availability_grid/booking`
