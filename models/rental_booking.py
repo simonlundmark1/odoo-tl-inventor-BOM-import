@@ -290,6 +290,18 @@ class TlRentalBookingLine(models.Model):
     date_end = fields.Datetime(related='booking_id.date_end', store=True)
     state = fields.Selection(related='booking_id.state', store=True)
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Ensure warehouse fields are populated from booking header if not set."""
+        for vals in vals_list:
+            if vals.get('booking_id') and (not vals.get('source_warehouse_id') or not vals.get('rental_warehouse_id')):
+                booking = self.env['tl.rental.booking'].browse(vals['booking_id'])
+                if not vals.get('source_warehouse_id') and booking.source_warehouse_id:
+                    vals['source_warehouse_id'] = booking.source_warehouse_id.id
+                if not vals.get('rental_warehouse_id') and booking.rental_warehouse_id:
+                    vals['rental_warehouse_id'] = booking.rental_warehouse_id.id
+        return super().create(vals_list)
+
     @api.onchange('booking_id')
     def _onchange_booking_id(self):
         for line in self:
@@ -315,7 +327,6 @@ class TlRentalBookingLine(models.Model):
         Check if adding this line would exceed the product's rental_total_units
         during the booking period.
         """
-        Quant = self.env['stock.quant']
         for line in self:
             if not line.product_id or not line.date_start or not line.date_end:
                 continue
@@ -326,24 +337,30 @@ class TlRentalBookingLine(models.Model):
             product = line.product_id
             company = line.company_id or self.env.company
 
-            domain_quant = [
-                ('product_id', '=', product.id),
-                ('company_id', '=', company.id if company else False),
-                ('location_id.usage', '=', 'internal'),
-            ]
-
-            groups = Quant.read_group(domain_quant, ['quantity:sum', 'reserved_quantity:sum'], [])
-            if groups:
-                quantity = groups[0].get('quantity', 0.0) or 0.0
-                reserved_qty = groups[0].get('reserved_quantity', 0.0) or 0.0
-                base_capacity = quantity - reserved_qty
+            # Filter by source warehouse - use line's warehouse or fall back to booking header
+            source_wh = line.source_warehouse_id or line.booking_id.source_warehouse_id
+            source_location = source_wh.lot_stock_id if source_wh else None
+            
+            # Use _compute_quantities for accurate available qty (same as Odoo stock)
+            if source_location:
+                product_with_ctx = product.with_context(location=source_location.id)
             else:
-                base_capacity = 0.0
+                product_with_ctx = product
+            
+            base_capacity = product_with_ctx.qty_available
+            
+            logger.info(
+                "Availability check for %s in warehouse %s (location %s): qty_available=%s",
+                product.display_name,
+                source_wh.name if source_wh else 'N/A',
+                source_location.complete_name if source_location else 'N/A',
+                base_capacity,
+            )
 
             if base_capacity <= 0:
                 raise ValidationError(_(
-                    "No available stock for product '%s' in the selected warehouse."
-                ) % (product.display_name,))
+                    "No available stock for product '%s' in the selected warehouse '%s'."
+                ) % (product.display_name, source_wh.name if source_wh else 'N/A'))
 
             domain = [
                 ('id', '!=', line.id),
@@ -353,6 +370,9 @@ class TlRentalBookingLine(models.Model):
                 ('date_start', '<', line.date_end),
                 ('date_end', '>', line.date_start),
             ]
+            # Also filter overlapping bookings by the same source warehouse
+            if source_wh:
+                domain.append(('source_warehouse_id', '=', source_wh.id))
             overlapping_lines = self.search(domain)
             current_booked_qty = sum(overlapping_lines.mapped('quantity'))
 
@@ -443,40 +463,17 @@ class TlRentalBookingLine(models.Model):
             overall_start_dt = monday_dt
             overall_end_dt = monday_dt
 
-        # Compute base capacity per product via stock.quant
-        Quant = self.env['stock.quant']
-        domain_quant = [
-            ('product_id', 'in', product_ids),
-            ('company_id', '=', company.id),
-        ]
-        if warehouse_id:
-            warehouse = self.env['stock.warehouse'].browse(warehouse_id)
-            if warehouse and warehouse.lot_stock_id:
-                domain_quant.append(('location_id', 'child_of', warehouse.lot_stock_id.id))
-            else:
-                # Fall back to all internal locations if warehouse is misconfigured
-                domain_quant.append(('location_id.usage', '=', 'internal'))
-        else:
-            domain_quant.append(('location_id.usage', '=', 'internal'))
-
+        # Compute base capacity per product using qty_available with location context
         base_capacity_by_product = defaultdict(float)
         if product_ids:
-            groups = Quant.read_group(
-                domain_quant,
-                ['product_id', 'quantity:sum', 'reserved_quantity:sum'],
-                ['product_id'],
-            )
-            for group in groups:
-                product_field = group.get('product_id')
-                if isinstance(product_field, (list, tuple)):
-                    product_id = product_field[0]
-                else:
-                    product_id = product_field
-                if not product_id:
-                    continue
-                quantity = group.get('quantity', 0.0) or 0.0
-                reserved_qty = group.get('reserved_quantity', 0.0) or 0.0
-                base_capacity_by_product[product_id] = max(quantity - reserved_qty, 0.0)
+            products = self.env['product.product'].browse(product_ids)
+            if warehouse_id:
+                warehouse = self.env['stock.warehouse'].browse(warehouse_id)
+                if warehouse and warehouse.lot_stock_id:
+                    products = products.with_context(location=warehouse.lot_stock_id.id)
+            
+            for product in products:
+                base_capacity_by_product[product.id] = max(product.qty_available, 0.0)
 
         # Pre-compute booked quantities per product & week from booking lines
         booked_by_product_week = defaultdict(lambda: defaultdict(float))
