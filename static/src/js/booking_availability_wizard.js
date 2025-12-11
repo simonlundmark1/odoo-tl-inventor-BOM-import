@@ -5,6 +5,7 @@ import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
 import { Dialog } from "@web/core/dialog/dialog";
 import { jsonrpc } from "@web/core/network/rpc";
+import { _t } from "@web/core/l10n/translation";
 
 /**
  * Booking Availability Wizard
@@ -55,7 +56,7 @@ export class BookingAvailabilityWizard extends Component {
             });
             this.state.warehouses = result.warehouses || [];
         } catch (error) {
-            console.error("Failed to load warehouses", error);
+            // Failed to load warehouses - continue with empty list
             this.state.warehouses = [];
         }
     }
@@ -70,10 +71,10 @@ export class BookingAvailabilityWizard extends Component {
 
     get selectedWarehouseName() {
         if (!this.state.selectedWarehouseId) {
-            return "All Warehouses";
+            return _t("All Warehouses");
         }
         const wh = this.state.warehouses.find(w => w.id === this.state.selectedWarehouseId);
-        return wh ? wh.name : "Unknown";
+        return wh ? wh.name : _t("Unknown");
     }
 
     async loadGrid() {
@@ -119,8 +120,8 @@ export class BookingAvailabilityWizard extends Component {
                 this.state.grid = grid;
             }
         } catch (error) {
-            console.error("Failed to load booking availability grid", error);
-            this.state.error = error?.message || String(error);
+            // Grid load failed
+            this.state.error = (error && error.message) ? error.message : String(error);
         } finally {
             this.state.loading = false;
         }
@@ -224,9 +225,9 @@ export class BookingAvailabilityWizard extends Component {
         return this.isColumnSelected(colIndex);
     }
 
-    getCellColor(cell, baseCapacity, isSelected) {
-        const capacity = baseCapacity || 0;
-        const booked = cell.booked || 0;
+    getCellColor(cell, fleetCapacity, isSelected) {
+        const capacity = fleetCapacity || 0;
+        const booked = cell.committed || 0;
         const needed = this.neededByProduct[cell.product_id] || cell.needed || 0;
         const available = cell.available || 0;
 

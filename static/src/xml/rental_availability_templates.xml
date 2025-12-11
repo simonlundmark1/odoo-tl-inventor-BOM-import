@@ -90,10 +90,10 @@
                                     <t t-foreach="row.cells" t-as="cell" t-key="cell.column_key">
                                         <t t-set="colData" t-value="columns.find(c => c.key === cell.column_key)"/>
                                         <td
-                                            t-att-title="cell.booked > 0 ? (cell.booked === 1 ? '1 booking' : cell.booked + ' bookings') + ' - Click to view' : 'No bookings'"
-                                            t-att-class="'text-center align-middle border-bottom o_tlrm_cell' + (cell.booked > 0 ? ' o_tlrm_cell_clickable' : '')"
-                                            t-att-style="'background-color: ' + this.getCellColor(cell, row.base_capacity) + ';'"
-                                            t-on-click="() => cell.booked > 0 &amp;&amp; this.openBookingsForCell(row.product_id, cell.column_key, colData?.start, colData?.end)"
+                                            t-att-title="cell.committed > 0 ? (cell.committed === 1 ? '1 unit committed' : cell.committed + ' units committed') + ' - Click to view' : 'No commitments'"
+                                            t-att-class="'text-center align-middle border-bottom o_tlrm_cell' + (cell.committed > 0 ? ' o_tlrm_cell_clickable' : '')"
+                                            t-att-style="'background-color: ' + this.getCellColor(cell, row.fleet_capacity) + ';'"
+                                            t-on-click="() => cell.committed > 0 &amp;&amp; this.openBookingsForCell(row.product_id, cell.column_key, colData and colData.start, colData and colData.end)"
                                         >
                                             <t t-esc="cell.available"/>
                                         </td>

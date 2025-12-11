@@ -117,7 +117,7 @@
                                             </td>
                                             <t t-foreach="row.cells" t-as="cell" t-key="cell.column_key">
                                                 <t t-set="isSelected" t-value="isCellSelected(row_index, cell_index)"/>
-                                                <t t-set="cellColor" t-value="getCellColor(cell, row.base_capacity, isSelected)"/>
+                                                <t t-set="cellColor" t-value="getCellColor(cell, row.fleet_capacity, isSelected)"/>
                                                 <td class="text-center align-middle o_tlrm_wizard_cell"
                                                     t-att-style="'background-color: ' + cellColor + '; cursor: pointer; user-select: none;' + (isSelected ? ' outline: 2px solid #007bff; outline-offset: -2px;' : '')"
                                                     t-att-title="(cell.tooltip || '') + ' (Need: ' + (neededByProduct[row.product_id] || 0) + ')'"

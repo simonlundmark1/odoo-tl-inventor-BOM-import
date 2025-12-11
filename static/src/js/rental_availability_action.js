@@ -4,6 +4,7 @@ import { Component, onWillStart, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
 import { jsonrpc } from "@web/core/network/rpc";
+import { _t } from "@web/core/l10n/translation";
 
 const actionRegistry = registry.category("actions");
 
@@ -33,7 +34,7 @@ export class TlrmAvailabilityAction extends Component {
             const result = await jsonrpc('/tlrm/warehouses', {});
             this.state.warehouses = result.warehouses || [];
         } catch (error) {
-            console.error("Failed to load warehouses", error);
+            // Failed to load warehouses - continue with empty list
             this.state.warehouses = [];
         }
     }
@@ -50,24 +51,20 @@ export class TlrmAvailabilityAction extends Component {
         try {
             // Include all products for now, limit to 100
             const productDomain = [];
-            console.log("TLRM: Starting to load products...");
             const products = await this.orm.searchRead(
                 "product.product",
                 productDomain,
                 ["id"],
                 { limit: 100 }
             );
-            console.log("TLRM: Found products:", products.length);
             const productIds = products.map((p) => p.id);
 
             if (productIds.length === 0) {
-                console.log("TLRM: No products found, showing empty grid");
                 this.state.grid = { columns: [], rows: [] };
                 this.state.loading = false;
                 return;
             }
 
-            console.log("TLRM: Calling get_availability_grid with", productIds.length, "products");
             // Calculate start date based on week offset (Odoo format: YYYY-MM-DD HH:MM:SS)
             const startDate = new Date();
             startDate.setDate(startDate.getDate() + (this.state.weekOffset * 7));
@@ -85,11 +82,10 @@ export class TlrmAvailabilityAction extends Component {
                     needed_by_product: {},
                 }
             );
-            console.log("TLRM: Grid loaded successfully", grid);
 
             this.state.grid = grid;
         } catch (error) {
-            console.error("Failed to load rental availability grid", error);
+            // Grid load failed
             this.state.error = error && error.message ? error.message : String(error);
         } finally {
             this.state.loading = false;
@@ -187,16 +183,16 @@ export class TlrmAvailabilityAction extends Component {
             );
             this.state.grid = grid;
         } catch (error) {
-            console.error("Failed to reload grid", error);
+            // Grid reload failed
         }
     }
 
     get selectedWarehouseName() {
         if (!this.state.selectedWarehouseId) {
-            return "All Warehouses";
+            return _t("All Warehouses");
         }
         const wh = this.state.warehouses.find(w => w.id === this.state.selectedWarehouseId);
-        return wh ? wh.name : "Unknown";
+        return wh ? wh.name : _t("Unknown");
     }
 
     get columns() {
@@ -239,9 +235,9 @@ export class TlrmAvailabilityAction extends Component {
      * Uses Odoo 19 color palette for a modern, cohesive look.
      * Green (0%) → Yellow (75%) → Red (100%)
      */
-    getCellColor(cell, baseCapacity) {
-        const capacity = baseCapacity || 0;
-        const booked = cell.booked || 0;
+    getCellColor(cell, fleetCapacity) {
+        const capacity = fleetCapacity || 0;
+        const booked = cell.committed || 0;
 
         // If no capacity, show red (fully booked)
         if (capacity <= 0) {
