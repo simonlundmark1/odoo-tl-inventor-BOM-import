@@ -88,3 +88,116 @@
   </record>
   ```
 - **OBS:** `ir.module.category` finns fortfarande, men kopplingen till `res.groups` via `category_id` är borta.
+
+## 10. JavaScript RPC – `rpc` service borttaget
+
+- I Odoo 19 har **`rpc` service tagits bort** från OWL-komponenter.
+- Försök att använda `useService("rpc")` ger felet:
+  - `Error: Service rpc is not available`.
+- **Lösning i Odoo 19:**
+  - Importera `jsonrpc` direkt från `@web/core/network/rpc`.
+  - Använd `jsonrpc()` som en vanlig funktion istället för en service.
+- Exempel på korrekt användning:
+  ```javascript
+  /** @odoo-module **/
+  import { jsonrpc } from "@web/core/network/rpc";
+  
+  // I en async metod:
+  async loadData() {
+      const result = await jsonrpc('/my/controller/endpoint', {
+          param1: value1,
+          param2: value2,
+      });
+  }
+  ```
+## 11. stock.move – `name` fält borttaget
+
+- I Odoo 19 har **`name` fältet tagits bort** från `stock.move`.
+- Försök att skapa en move med `'name': ...` ger felet:
+  - `ValueError: Invalid field 'name' in 'stock.move'`
+- **Lösning:** Ta bort `name` från move-skapande kod. Odoo genererar automatiskt en beskrivning.
+
+```python
+# Felaktigt (fungerar INTE i Odoo 19):
+move_vals = {
+    'name': product.display_name,  # <-- TA BORT
+    'product_id': product.id,
+    ...
+}
+
+# Korrekt (Odoo 19):
+move_vals = {
+    'product_id': product.id,
+    ...
+}
+```
+
+---
+
+- **Felaktigt (fungerar INTE i Odoo 19):**
+  ```javascript
+  // FUNGERAR INTE:
+  this.rpc = useService("rpc");
+  const result = await this.rpc('/my/endpoint', {});
+  ```
+- **Korrekt (Odoo 19):**
+  ```javascript
+  import { jsonrpc } from "@web/core/network/rpc";
+  const result = await jsonrpc('/my/endpoint', {});
+  ```
+- **OBS:** `orm` service (`useService("orm")`) fungerar fortfarande för att anropa modellmetoder via `this.orm.call()`.
+
+## 11. JavaScript-mönster för Odoo 19 OWL-komponenter
+
+Komplett exempel på en OWL-komponent i Odoo 19:
+
+```javascript
+/** @odoo-module **/
+
+import { Component, onWillStart, useState } from "@odoo/owl";
+import { useService } from "@web/core/utils/hooks";
+import { registry } from "@web/core/registry";
+import { jsonrpc } from "@web/core/network/rpc";
+
+export class MyComponent extends Component {
+    static template = "my_module.MyComponentTemplate";
+    static props = { "*": true };
+
+    setup() {
+        // Tillgängliga services i Odoo 19:
+        this.orm = useService("orm");           // För modell-anrop
+        this.action = useService("action");     // För att öppna actions
+        this.notification = useService("notification"); // För notifieringar
+        // OBS: useService("rpc") finns INTE längre!
+        
+        this.state = useState({
+            loading: true,
+            data: null,
+        });
+
+        onWillStart(async () => {
+            await this.loadData();
+        });
+    }
+
+    async loadData() {
+        // Anropa modellmetod via orm:
+        const records = await this.orm.call(
+            "my.model",
+            "my_method",
+            [arg1, arg2],
+            { kwarg1: value1 }
+        );
+
+        // Anropa controller-endpoint via jsonrpc:
+        const result = await jsonrpc('/my/controller/endpoint', {
+            param1: value1,
+        });
+
+        this.state.data = result;
+        this.state.loading = false;
+    }
+}
+
+registry.category("actions").add("my_action_tag", MyComponent);
+```

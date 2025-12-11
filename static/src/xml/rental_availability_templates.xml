@@ -25,6 +25,16 @@
             </t>
             <t t-else="">
                 <div class="o_tlrm_availability_controls o_control_panel_main d-flex align-items-center gap-3 px-3 py-2 border-bottom bg-white">
+                    <div class="o_tlrm_warehouse_filter">
+                        <select class="form-select form-select-sm" style="width: 180px;" t-on-change="onWarehouseChange">
+                            <option value="">All Warehouses</option>
+                            <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                <option t-att-value="wh.id" t-att-selected="state.selectedWarehouseId === wh.id">
+                                    <t t-esc="wh.name"/>
+                                </option>
+                            </t>
+                        </select>
+                    </div>
                     <div class="o_tlrm_search_box">
                         <div class="input-group input-group-sm" style="width: 240px;">
                             <span class="input-group-text bg-white border-end-0">

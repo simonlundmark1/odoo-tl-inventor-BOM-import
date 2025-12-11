@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="tl_rental_manager.TlrmDashboard">
+        <div class="o_tlrm_dashboard o_action h-100 d-flex flex-column bg-view">
+            <!-- Loading State -->
+            <t t-if="state.loading">
+                <div class="d-flex align-items-center justify-content-center flex-grow-1">
+                    <div class="o_loading_indicator">
+                        <i class="fa fa-spin fa-spinner fa-2x text-muted"/>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Error State -->
+            <t t-elif="state.error">
+                <div class="p-3">
+                    <div class="alert alert-danger mb-0" role="alert">
+                        <t t-esc="state.error"/>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Dashboard Content -->
+            <t t-else="">
+                <!-- Header -->
+                <div class="o_tlrm_dashboard_header d-flex align-items-center justify-content-between px-4 py-3 border-bottom bg-white">
+                    <h2 class="mb-0">
+                        <i class="fa fa-dashboard me-2 text-primary"/>
+                        Rental Dashboard
+                    </h2>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" t-on-click="refresh">
+                            <i class="fa fa-refresh me-1"/>
+                            Refresh
+                        </button>
+                        <button class="btn btn-primary" t-on-click="createBooking">
+                            <i class="fa fa-plus me-1"/>
+                            New Booking
+                        </button>
+                    </div>
+                </div>
+
+                <div class="o_tlrm_dashboard_content flex-grow-1 overflow-auto p-4">
+                    <!-- KPI Cards Row -->
+                    <div class="row g-3 mb-4">
+                        <!-- Total Bookings -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <div class="text-muted small mb-1">Total Bookings</div>
+                                    <div class="display-6 fw-bold text-primary" t-on-click="() => this.openBookings()" style="cursor: pointer;">
+                                        <t t-esc="state.data?.total_bookings || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Active Rentals -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <div class="text-muted small mb-1">Active Rentals</div>
+                                    <div class="display-6 fw-bold text-info">
+                                        <t t-esc="state.data?.active_rentals || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Starting Today -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <div class="text-muted small mb-1">Starting Today</div>
+                                    <div class="display-6 fw-bold text-warning">
+                                        <t t-esc="state.data?.starting_today || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Ending Today -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <div class="text-muted small mb-1">Ending Today</div>
+                                    <div class="display-6 fw-bold text-secondary">
+                                        <t t-esc="state.data?.ending_today || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Overdue -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm" t-att-class="(state.data?.overdue > 0) ? 'border-danger' : ''">
+                                <div class="card-body text-center" t-on-click="openOverdue" style="cursor: pointer;">
+                                    <div class="text-muted small mb-1">Overdue</div>
+                                    <div t-att-class="'display-6 fw-bold ' + ((state.data?.overdue > 0) ? 'text-danger' : 'text-success')">
+                                        <t t-esc="state.data?.overdue || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Products Out -->
+                        <div class="col-md-4 col-lg-2">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <div class="text-muted small mb-1">Products Out</div>
+                                    <div class="display-6 fw-bold text-dark">
+                                        <t t-esc="state.data?.products_out || 0"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <!-- Bookings by State -->
+                        <div class="col-lg-4">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-white border-bottom">
+                                    <h5 class="mb-0">
+                                        <i class="fa fa-pie-chart me-2 text-muted"/>
+                                        Bookings by State
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <t t-if="state.data?.state_counts">
+                                        <t t-foreach="Object.entries(state.data.state_counts)" t-as="entry" t-key="entry[0]">
+                                            <t t-set="stateKey" t-value="entry[0]"/>
+                                            <t t-set="stateData" t-value="entry[1]"/>
+                                            <div class="d-flex align-items-center justify-content-between py-2 border-bottom" 
+                                                 style="cursor: pointer;"
+                                                 t-on-click="() => this.openBookingsByState(stateKey)">
+                                                <div class="d-flex align-items-center">
+                                                    <span t-att-class="'badge me-2 ' + this.getStateClass(stateKey)">
+                                                        <t t-esc="stateData.label"/>
+                                                    </span>
+                                                </div>
+                                                <span class="fw-bold">
+                                                    <t t-esc="stateData.count"/>
+                                                </span>
+                                            </div>
+                                        </t>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Bookings -->
+                        <div class="col-lg-8">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="fa fa-clock-o me-2 text-muted"/>
+                                        Recent Bookings
+                                    </h5>
+                                    <button class="btn btn-sm btn-outline-primary" t-on-click="() => this.openBookings()">
+                                        View All
+                                    </button>
+                                </div>
+                                <div class="card-body p-0">
+                                    <t t-if="state.data?.recent_bookings?.length">
+                                        <table class="table table-hover mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Reference</th>
+                                                    <th>Project</th>
+                                                    <th>Start</th>
+                                                    <th>End</th>
+                                                    <th>State</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="state.data.recent_bookings" t-as="booking" t-key="booking.id">
+                                                    <tr style="cursor: pointer;" t-on-click="() => this.openBooking(booking.id)">
+                                                        <td class="fw-medium text-primary">
+                                                            <t t-esc="booking.name"/>
+                                                        </td>
+                                                        <td>
+                                                            <t t-esc="booking.project_id ? booking.project_id[1] : '-'"/>
+                                                        </td>
+                                                        <td>
+                                                            <t t-esc="this.formatDate(booking.date_start)"/>
+                                                        </td>
+                                                        <td>
+                                                            <t t-esc="this.formatDate(booking.date_end)"/>
+                                                        </td>
+                                                        <td>
+                                                            <span t-att-class="'badge ' + this.getStateClass(booking.state)">
+                                                                <t t-esc="state.data.state_counts?.[booking.state]?.label || booking.state"/>
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </t>
+                                    <t t-else="">
+                                        <div class="text-center text-muted py-4">
+                                            <i class="fa fa-inbox fa-2x mb-2"/>
+                                            <p class="mb-0">No bookings yet</p>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="row g-3 mt-3">
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <h6 class="text-muted mb-3">Quick Actions</h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-outline-primary" t-on-click="createBooking">
+                                            <i class="fa fa-plus me-1"/>
+                                            New Booking
+                                        </button>
+                                        <button class="btn btn-outline-secondary" t-on-click="openAvailability">
+                                            <i class="fa fa-calendar me-1"/>
+                                            Check Availability
+                                        </button>
+                                        <button class="btn btn-outline-info" t-on-click="() => this.openBookingsByState('reserved')">
+                                            <i class="fa fa-bookmark me-1"/>
+                                            Reserved Bookings
+                                        </button>
+                                        <button class="btn btn-outline-warning" t-on-click="() => this.openBookingsByState('ongoing')">
+                                            <i class="fa fa-play me-1"/>
+                                            Ongoing Rentals
+                                        </button>
+                                        <t t-if="state.data?.overdue > 0">
+                                            <button class="btn btn-danger" t-on-click="openOverdue">
+                                                <i class="fa fa-exclamation-triangle me-1"/>
+                                                <t t-esc="state.data.overdue"/> Overdue
+                                            </button>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

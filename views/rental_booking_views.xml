@@ -44,10 +44,36 @@
         <field name="target">main</field>
     </record>
 
-    <!-- Menu -->
-    <menuitem id="tlrm_menu_root" name="Rental" parent="stock.menu_stock_root" sequence="20" groups="tl_rental_manager.tlrm_group_user"/>
-    <menuitem id="tlrm_menu_booking" name="Bookings" parent="tlrm_menu_root" action="tlrm_action_booking" sequence="10" groups="tl_rental_manager.tlrm_group_user"/>
-    <menuitem id="tlrm_menu_availability" name="Availability" parent="tlrm_menu_root" action="tlrm_action_availability" sequence="20" groups="tl_rental_manager.tlrm_group_user"/>
+    <record id="tlrm_action_dashboard" model="ir.actions.client">
+        <field name="name">Rental Dashboard</field>
+        <field name="tag">tlrm_dashboard</field>
+        <field name="target">main</field>
+    </record>
+
+    <!-- Main Menu (Top-level in sidebar) -->
+    <menuitem id="tlrm_menu_root" 
+              name="Rental" 
+              sequence="45" 
+              web_icon="tl_rental_manager,static/description/icon.svg"
+              groups="tl_rental_manager.tlrm_group_user"/>
+    <menuitem id="tlrm_menu_dashboard" 
+              name="Dashboard" 
+              parent="tlrm_menu_root" 
+              action="tlrm_action_dashboard" 
+              sequence="5" 
+              groups="tl_rental_manager.tlrm_group_user"/>
+    <menuitem id="tlrm_menu_booking" 
+              name="Bookings" 
+              parent="tlrm_menu_root" 
+              action="tlrm_action_booking" 
+              sequence="10" 
+              groups="tl_rental_manager.tlrm_group_user"/>
+    <menuitem id="tlrm_menu_availability" 
+              name="Availability" 
+              parent="tlrm_menu_root" 
+              action="tlrm_action_availability" 
+              sequence="20" 
+              groups="tl_rental_manager.tlrm_group_user"/>
 
     <!-- List View -->
     <record id="tlrm_view_booking_list" model="ir.ui.view">
@@ -60,7 +86,6 @@
                 <field name="date_start"/>
                 <field name="date_end"/>
                 <field name="source_warehouse_id" optional="hide"/>
-                <field name="rental_warehouse_id" optional="hide"/>
                 <field name="company_id" groups="base.group_multi_company" optional="hide"/>
                 <field name="state" widget="badge" 
                        decoration-info="state == 'draft'" 
@@ -96,7 +121,6 @@
                         <group>
                             <field name="project_id"/>
                             <field name="source_warehouse_id"/>
-                            <field name="rental_warehouse_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group>
@@ -110,7 +134,6 @@
                                 <list editable="bottom">
                                     <field name="product_id"/>
                                     <field name="source_warehouse_id"/>
-                                    <field name="rental_warehouse_id"/>
                                     <field name="quantity"/>
                                     <field name="date_start" column_invisible="1"/>
                                     <field name="date_end" column_invisible="1"/>
@@ -167,7 +190,6 @@
                 <field name="date_start" string="Start"/>
                 <field name="date_end" string="End"/>
                 <field name="source_warehouse_id" string="From" optional="hide"/>
-                <field name="rental_warehouse_id" string="To" optional="hide"/>
                 <field name="state" widget="badge"
                        decoration-warning="state == 'reserved'"
                        decoration-success="state == 'ongoing'"
@@ -191,7 +213,6 @@
                         </group>
                         <group>
                             <field name="source_warehouse_id"/>
-                            <field name="rental_warehouse_id"/>
                             <field name="state"/>
                         </group>
                     </group>

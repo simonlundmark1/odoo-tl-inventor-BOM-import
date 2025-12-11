@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <!-- 
+            This function creates TL Rental Out locations for all existing warehouses
+            that don't have one yet. New warehouses get the location automatically
+            via the create() override in stock_warehouse.py.
+        -->
+        <function model="stock.warehouse" name="_create_tlrm_rental_locations_for_existing"/>
+        
+        <!-- Fix existing rental locations that were created with 'customer' usage -->
+        <function model="stock.warehouse" name="_fix_tlrm_rental_location_usage"/>
+    </data>
+</odoo>

@@ -2,6 +2,16 @@ from odoo import http
 from odoo.http import request
 
 
+def _to_int(value):
+    """Safely convert value to int, returning None on failure."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class TlrmAvailabilityController(http.Controller):
 
     @http.route(
@@ -19,29 +29,15 @@ class TlrmAvailabilityController(http.Controller):
     ):
         env = request.env
 
-        if company_id:
-            try:
-                company_id = int(company_id)
-            except (TypeError, ValueError):
-                company_id = None
-
-        company = env.company
-        if company_id:
-            company = env['res.company'].browse(company_id)
+        company_id = _to_int(company_id)
+        company = env['res.company'].browse(company_id) if company_id else env.company
 
         line_model = env['tl.rental.booking.line'].with_context(
             allowed_company_ids=[company.id]
         )
 
-        week_count = int(week_count or 0)
-        if week_count <= 0:
-            week_count = 12
-
-        if warehouse_id:
-            try:
-                warehouse_id = int(warehouse_id)
-            except (TypeError, ValueError):
-                warehouse_id = None
+        week_count = _to_int(week_count) or 12
+        warehouse_id = _to_int(warehouse_id)
 
         if not product_domain:
             product_domain = [('type', '=', 'product')]
@@ -77,9 +73,8 @@ class TlrmAvailabilityController(http.Controller):
     ):
         env = request.env
 
-        try:
-            booking_id = int(booking_id)
-        except (TypeError, ValueError):
+        booking_id = _to_int(booking_id)
+        if not booking_id:
             return {'error': 'invalid_booking_id'}
 
         booking = env['tl.rental.booking'].browse(booking_id)
@@ -91,15 +86,8 @@ class TlrmAvailabilityController(http.Controller):
             allowed_company_ids=[company.id]
         )
 
-        week_count = int(week_count or 0)
-        if week_count <= 0:
-            week_count = 12
-
-        if warehouse_id:
-            try:
-                warehouse_id = int(warehouse_id)
-            except (TypeError, ValueError):
-                warehouse_id = None
+        week_count = _to_int(week_count) or 12
+        warehouse_id = _to_int(warehouse_id)
 
         if not warehouse_id:
             warehouse_id = booking.source_warehouse_id.id or None
@@ -132,3 +120,26 @@ class TlrmAvailabilityController(http.Controller):
         grid_meta['mode'] = 'booking'
         grid_meta['booking_id'] = booking.id
         return grid
+
+    @http.route(
+        '/tlrm/warehouses',
+        type='json',
+        auth='user'
+    )
+    def tlrm_get_warehouses(self, company_id=None):
+        """Get list of warehouses for the filter dropdown."""
+        env = request.env
+        
+        company_id = _to_int(company_id)
+        company = env['res.company'].browse(company_id) if company_id else env.company
+        
+        warehouses = env['stock.warehouse'].search([
+            ('company_id', '=', company.id)
+        ])
+        
+        return {
+            'warehouses': [
+                {'id': wh.id, 'name': wh.name}
+                for wh in warehouses
+            ]
+        }

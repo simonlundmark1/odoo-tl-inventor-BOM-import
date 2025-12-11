@@ -71,45 +71,58 @@ class ProductTemplate(models.Model):
     # I will implement `_compute_rental_counts` using search_count/read_group for robustness and triggering.
     
     def _compute_tlrm_counts(self):
-        # This compute method needs to handle recomputation.
-        # We will query tl.rental.booking.line.
+        """Compute rental availability counts.
+        
+        - Reserved: Units in 'reserved' state bookings (not yet picked up)
+        - Rented: Units in TL Rental Out locations (physically out)
+        - Available: Stock in source locations minus reserved bookings
+        """
         BookingLine = self.env['tl.rental.booking.line']
         Quant = self.env['stock.quant']
+        Warehouse = self.env['stock.warehouse']
+        
+        # Get all TL Rental Out location IDs
+        rental_location_ids = Warehouse.search([
+            ('company_id', '=', self.env.company.id),
+            ('tlrm_rental_location_id', '!=', False),
+        ]).mapped('tlrm_rental_location_id').ids
+        
+        # Get all source (stock) location IDs
+        stock_location_ids = Warehouse.search([
+            ('company_id', '=', self.env.company.id),
+        ]).mapped('lot_stock_id').ids
+        
         for product in self:
-            # Get related product.product IDs
             product_variant_ids = product.product_variant_ids.ids
             
-            lines = BookingLine.search([
+            # Reserved: sum of quantities in 'reserved' state bookings
+            reserved_lines = BookingLine.search([
                 ('product_id', 'in', product_variant_ids),
-                ('state', 'in', ['reserved', 'ongoing', 'finished']),
+                ('state', '=', 'reserved'),
                 ('company_id', '=', self.env.company.id)
             ])
+            reserved = sum(reserved_lines.mapped('quantity'))
             
-            reserved = 0.0
+            # Rented: physical stock in TL Rental Out locations
             rented = 0.0
-            
-            for line in lines:
-                if line.state == 'reserved':
-                    reserved += line.quantity
-                elif line.state in ['ongoing', 'finished']:
-                    rented += line.quantity
-
-            # Compute a global stock-based capacity over all internal locations
-            base_capacity = 0.0
-            if product_variant_ids:
-                domain = [
+            if product_variant_ids and rental_location_ids:
+                rental_quants = Quant.search([
                     ('product_id', 'in', product_variant_ids),
-                    ('location_id.usage', '=', 'internal'),
-                    ('company_id', '=', self.env.company.id),
-                ]
-                groups = Quant.read_group(domain, ['quantity:sum', 'reserved_quantity:sum'], [])
-
-                if groups:
-                    quantity = groups[0].get('quantity', 0.0) or 0.0
-                    reserved_qty = groups[0].get('reserved_quantity', 0.0) or 0.0
-                    base_capacity = max(quantity - reserved_qty, 0.0)
-
-            product.tlrm_reserved_units = reserved
-            product.tlrm_rented_units = rented
-            product.tlrm_available_units = max(base_capacity - reserved - rented, 0.0)
+                    ('location_id', 'in', rental_location_ids),
+                ])
+                rented = sum(rental_quants.mapped('quantity'))
+            
+            # Available: stock in source locations minus reserved bookings
+            # (rented items are already NOT in source locations)
+            source_stock = 0.0
+            if product_variant_ids and stock_location_ids:
+                source_quants = Quant.search([
+                    ('product_id', 'in', product_variant_ids),
+                    ('location_id', 'child_of', stock_location_ids),
+                ])
+                source_stock = sum(source_quants.mapped('quantity'))
+            
+            product.tlrm_reserved_units = int(reserved)
+            product.tlrm_rented_units = int(rented)
+            product.tlrm_available_units = int(max(source_stock - reserved, 0.0))
 

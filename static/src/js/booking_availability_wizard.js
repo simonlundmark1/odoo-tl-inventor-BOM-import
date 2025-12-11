@@ -4,6 +4,7 @@ import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
 import { Dialog } from "@web/core/dialog/dialog";
+import { jsonrpc } from "@web/core/network/rpc";
 
 /**
  * Booking Availability Wizard
@@ -36,11 +37,43 @@ export class BookingAvailabilityWizard extends Component {
             selectionStart: null,  // {rowIndex, colIndex} or null
             selectionEnd: null,
             isSelecting: false,
+            // Warehouse state
+            warehouses: [],
+            selectedWarehouseId: this.props.warehouseId || null,
         });
 
         onWillStart(async () => {
+            await this.loadWarehouses();
             await this.loadGrid();
         });
+    }
+
+    async loadWarehouses() {
+        try {
+            const result = await jsonrpc('/tlrm/warehouses', {
+                company_id: this.props.companyId || null,
+            });
+            this.state.warehouses = result.warehouses || [];
+        } catch (error) {
+            console.error("Failed to load warehouses", error);
+            this.state.warehouses = [];
+        }
+    }
+
+    async onWarehouseChange(ev) {
+        const value = ev.target.value;
+        this.state.selectedWarehouseId = value ? parseInt(value, 10) : null;
+        this.state.selectionStart = null;
+        this.state.selectionEnd = null;
+        await this.loadGrid();
+    }
+
+    get selectedWarehouseName() {
+        if (!this.state.selectedWarehouseId) {
+            return "All Warehouses";
+        }
+        const wh = this.state.warehouses.find(w => w.id === this.state.selectedWarehouseId);
+        return wh ? wh.name : "Unknown";
     }
 
     async loadGrid() {
@@ -73,7 +106,7 @@ export class BookingAvailabilityWizard extends Component {
                 {
                     date_start: dateStr,
                     week_count: this.state.viewMode === "week" ? periodCount : Math.ceil(periodCount / 7),
-                    warehouse_id: this.props.warehouseId || null,
+                    warehouse_id: this.state.selectedWarehouseId,
                     company_id: this.props.companyId || null,
                     needed_by_product: neededByProduct,
                 }

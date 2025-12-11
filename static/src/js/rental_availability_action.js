@@ -3,6 +3,7 @@
 import { Component, onWillStart, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
+import { jsonrpc } from "@web/core/network/rpc";
 
 const actionRegistry = registry.category("actions");
 
@@ -17,11 +18,30 @@ export class TlrmAvailabilityAction extends Component {
             searchQuery: "",
             sortOrder: "asc", // "asc" or "desc"
             weekOffset: 0, // offset in weeks from current date
+            warehouses: [], // list of {id, name}
+            selectedWarehouseId: null, // null = all warehouses
         });
 
         onWillStart(async () => {
+            await this.loadWarehouses();
             await this.loadGrid();
         });
+    }
+
+    async loadWarehouses() {
+        try {
+            const result = await jsonrpc('/tlrm/warehouses', {});
+            this.state.warehouses = result.warehouses || [];
+        } catch (error) {
+            console.error("Failed to load warehouses", error);
+            this.state.warehouses = [];
+        }
+    }
+
+    async onWarehouseChange(ev) {
+        const value = ev.target.value;
+        this.state.selectedWarehouseId = value ? parseInt(value, 10) : null;
+        await this.loadGrid();
     }
 
     async loadGrid() {
@@ -61,7 +81,7 @@ export class TlrmAvailabilityAction extends Component {
                 {
                     date_start: dateStr,
                     week_count: 12,
-                    warehouse_id: null,
+                    warehouse_id: this.state.selectedWarehouseId,
                     needed_by_product: {},
                 }
             );
@@ -161,7 +181,7 @@ export class TlrmAvailabilityAction extends Component {
                 {
                     date_start: dateStr,
                     week_count: 12,
-                    warehouse_id: null,
+                    warehouse_id: this.state.selectedWarehouseId,
                     needed_by_product: {},
                 }
             );
@@ -169,6 +189,14 @@ export class TlrmAvailabilityAction extends Component {
         } catch (error) {
             console.error("Failed to reload grid", error);
         }
+    }
+
+    get selectedWarehouseName() {
+        if (!this.state.selectedWarehouseId) {
+            return "All Warehouses";
+        }
+        const wh = this.state.warehouses.find(w => w.id === this.state.selectedWarehouseId);
+        return wh ? wh.name : "Unknown";
     }
 
     get columns() {

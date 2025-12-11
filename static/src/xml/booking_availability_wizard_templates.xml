@@ -25,6 +25,16 @@
                     <!-- Control Panel -->
                     <div class="d-flex align-items-center justify-content-between p-2 border-bottom bg-light">
                         <div class="d-flex align-items-center gap-2">
+                            <!-- Warehouse Filter -->
+                            <select class="form-select form-select-sm" style="width: 160px;" t-on-change="onWarehouseChange">
+                                <option value="">All Warehouses</option>
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <option t-att-value="wh.id" t-att-selected="state.selectedWarehouseId === wh.id">
+                                        <t t-esc="wh.name"/>
+                                    </option>
+                                </t>
+                            </select>
+
                             <!-- View Mode Toggle -->
                             <div class="btn-group btn-group-sm">
                                 <button type="button" 
