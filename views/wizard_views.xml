@@ -51,7 +51,7 @@
         <field name="name">tl.inventor.booking.bom.import.wizard.form</field>
         <field name="model">tl.inventor.booking.bom.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Importera BOM till Booking">
+            <form string="Import BOM to Booking">
                 <field name="state" invisible="1"/>
                 <field name="booking_id" invisible="1"/>
                 <field name="preview_data" invisible="1"/>
@@ -60,7 +60,7 @@
                 <!-- Upload State -->
                 <group invisible="state != 'upload'">
                     <group colspan="2">
-                        <field name="file" filename="filename" widget="binary" string="Excel-fil (.xlsx)"/>
+                        <field name="file" filename="filename" widget="binary" string="Excel File (.xlsx)"/>
                         <field name="filename" invisible="1"/>
                     </group>
                     <group>
@@ -71,24 +71,24 @@
                 <!-- Confirm State (Preview) -->
                 <group invisible="state != 'confirm'">
                     <div class="alert alert-info" role="alert" colspan="2">
-                        <strong>Förhandsgranskning</strong>
+                        <strong>Preview</strong>
                     </div>
                     <group>
-                        <field name="matched_count" string="Matchade produkter"/>
-                        <field name="missing_count" string="Saknade produkter"/>
+                        <field name="matched_count" string="Matched Products"/>
+                        <field name="missing_count" string="Missing Products"/>
                     </group>
                     <group invisible="missing_count == 0">
-                        <field name="create_missing_products" string="Skapa saknade produkter"/>
+                        <field name="create_missing_products" string="Create Missing Products"/>
                     </group>
                     <group invisible="not duplicates_warning" colspan="2">
                         <div class="alert alert-warning" role="alert">
-                            <strong>⚠️ Dubbletter kommer summeras:</strong>
+                            <strong>⚠️ Duplicates will be aggregated:</strong>
                             <pre><field name="duplicates_warning" nolabel="1" readonly="1"/></pre>
                         </div>
                     </group>
                     <group invisible="not missing_products" colspan="2">
                         <div class="alert alert-warning" role="alert">
-                            <strong>⚠️ Produkter som saknas:</strong>
+                            <strong>⚠️ Products not found:</strong>
                             <pre><field name="missing_products" nolabel="1" readonly="1"/></pre>
                         </div>
                     </group>
@@ -100,11 +100,11 @@
                 </group>
                 
                 <footer>
-                    <button name="action_preview" string="Förhandsgranska" type="object" class="btn-primary" invisible="state != 'upload'"/>
-                    <button name="action_import" string="Importera" type="object" class="btn-primary" invisible="state != 'confirm'"/>
-                    <button name="action_back" string="Tillbaka" type="object" class="btn-secondary" invisible="state != 'confirm'"/>
-                    <button name="action_close" string="Stäng" type="object" class="btn-secondary" invisible="state != 'done'"/>
-                    <button string="Avbryt" class="btn-secondary" special="cancel" invisible="state == 'done'"/>
+                    <button name="action_preview" string="Preview" type="object" class="btn-primary" invisible="state != 'upload'"/>
+                    <button name="action_import" string="Import" type="object" class="btn-primary" invisible="state != 'confirm'"/>
+                    <button name="action_back" string="Back" type="object" class="btn-secondary" invisible="state != 'confirm'"/>
+                    <button name="action_close" string="Close" type="object" class="btn-secondary" invisible="state != 'done'"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" invisible="state == 'done'"/>
                 </footer>
             </form>
         </field>
@@ -112,7 +112,7 @@
 
     <!-- Booking BOM Import Wizard Action -->
     <record id="action_booking_bom_import_wizard" model="ir.actions.act_window">
-        <field name="name">Importera BOM</field>
+        <field name="name">Import BOM</field>
         <field name="res_model">tl.inventor.booking.bom.import.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>

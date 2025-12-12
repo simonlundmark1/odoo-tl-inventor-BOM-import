@@ -182,20 +182,20 @@ class BookingBomImportWizard(models.TransientModel):
                 created_lines.append(line)
         
         # Build result message
-        msg_parts = [f"<p><strong>✅ Import klar!</strong></p>"]
-        msg_parts.append(f"<p>Skapade <strong>{len(created_lines)}</strong> booking-rader.</p>")
+        msg_parts = [_("<p><strong>✅ Import complete!</strong></p>")]
+        msg_parts.append(_("<p>Created <strong>%s</strong> booking lines.</p>") % len(created_lines))
         
         if created_products:
-            msg_parts.append(f"<p>Skapade <strong>{len(created_products)}</strong> nya produkter:</p>")
+            msg_parts.append(_("<p>Created <strong>%s</strong> new products:</p>") % len(created_products))
             product_names = [p.name for p in created_products]
             msg_parts.append(f"<ul>{''.join(f'<li>{n}</li>' for n in product_names)}</ul>")
         
         skipped = len(missing) - len(created_products) if missing else 0
         if skipped > 0:
-            msg_parts.append(f"<p><strong>⚠️ {skipped} produkter hoppades över</strong> (fanns ej, skapades ej)</p>")
+            msg_parts.append(_("<p><strong>⚠️ %s products skipped</strong> (not found, not created)</p>") % skipped)
         
         if self.duplicates_warning:
-            msg_parts.append(f"<p><strong>ℹ️ Dubbletter summerades:</strong></p>")
+            msg_parts.append(_("<p><strong>ℹ️ Duplicates were aggregated:</strong></p>"))
             dup_list = self.duplicates_warning.replace('\n', '<br/>')
             msg_parts.append(f"<p style='color: #0c5460; background: #d1ecf1; padding: 8px; border-radius: 4px;'>{dup_list}</p>")
         
