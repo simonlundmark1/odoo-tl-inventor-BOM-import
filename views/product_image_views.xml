@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add product image to Booking Lines standalone list view -->
+    <record id="tlrm_view_booking_line_list_inherit_image" model="ir.ui.view">
+        <field name="name">tl.rental.booking.line.list.inherit.image</field>
+        <field name="model">tl.rental.booking.line</field>
+        <field name="inherit_id" ref="tl_rental_manager.tlrm_view_booking_line_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="before">
+                <field name="product_image" widget="image" options="{'size': [40, 40]}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add product image to Booking form inline list -->
+    <record id="tlrm_view_booking_form_inherit_line_image" model="ir.ui.view">
+        <field name="name">tl.rental.booking.form.inherit.line.image</field>
+        <field name="model">tl.rental.booking</field>
+        <field name="inherit_id" ref="tl_rental_manager.tlrm_view_booking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="before">
+                <field name="product_image" widget="image" options="{'size': [40, 40]}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

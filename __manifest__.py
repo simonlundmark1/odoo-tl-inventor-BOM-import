@@ -22,12 +22,15 @@
         'base',
         'stock',
         'product',
+        'tl_rental_manager',
     ],
     'data': [
         'security/ir.model.access.csv',
         'views/wizard_views.xml',
+        'views/booking_view_inherit.xml',
+        'views/product_image_views.xml',
     ],
     'installable': True,
-    'application': False,
+    'application': True,
     'auto_install': False,
 }

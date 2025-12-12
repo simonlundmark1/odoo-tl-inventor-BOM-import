@@ -99,7 +99,7 @@ class ProductImportWizard(models.TransientModel):
                     if self.create_missing:
                         vals = {
                             'name': part_number,
-                            'type': 'product',
+                            'is_storable': True,  # Odoo 19: replaces type='product'
                             'weight': row['weight_kg'] or 0.0,
                         }
                         if row['description']:

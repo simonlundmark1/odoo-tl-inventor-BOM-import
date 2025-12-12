@@ -6,15 +6,15 @@
         <field name="model">tl.rental.booking</field>
         <field name="inherit_id" ref="tl_rental_manager.tlrm_view_booking_form"/>
         <field name="arch" type="xml">
-            <!-- Add Import BOM button above the lines list in the Lines page -->
-            <xpath expr="//page[@string='Lines']/field[@name='line_ids']" position="before">
+            <!-- Add Import BOM button above the lines list -->
+            <xpath expr="//field[@name='line_ids']" position="before">
                 <div class="mb-2">
                     <button name="action_open_bom_import_wizard" 
-                            string="📥 Import BOM" 
+                            string="📥 Importera BOM" 
                             type="object" 
                             class="btn-secondary"
-                            invisible="state != 'draft'"
-                            title="Import products from Inventor BOM Excel file"/>
+                            invisible="state not in ('draft', 'planned')"
+                            title="Importera produkter från Inventor BOM Excel-fil"/>
                 </div>
             </xpath>
         </field>

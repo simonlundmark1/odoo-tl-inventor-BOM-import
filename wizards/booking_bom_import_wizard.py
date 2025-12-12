@@ -1,8 +1,10 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+import base64
+import json
 import logging
 
-from ..services.excel_parser import iter_bom_rows, aggregate_bom_rows, check_openpyxl
+from ..services.excel_parser import aggregate_bom_rows, check_openpyxl
 
 _logger = logging.getLogger(__name__)
 
@@ -18,13 +20,19 @@ class BookingBomImportWizard(models.TransientModel):
         ondelete='cascade',
     )
     
-    file = fields.Binary(string="Excel File", required=True)
+    file = fields.Binary(string="Excel File", attachment=False)
     filename = fields.Char(string="Filename")
     
     replace_existing = fields.Boolean(
         string="Replace Existing Lines",
         default=False,
         help="Remove existing booking lines before importing."
+    )
+    
+    create_missing_products = fields.Boolean(
+        string="Create Missing Products",
+        default=False,
+        help="Create new products for items not found in the database."
     )
     
     # Results
@@ -35,8 +43,9 @@ class BookingBomImportWizard(models.TransientModel):
         ('done', 'Done'),
     ], default='upload')
     
-    # Preview data (stored as text for simplicity)
+    # Preview data (stored as JSON)
     preview_data = fields.Text(string="Preview Data")
+    missing_data = fields.Text(string="Missing Products Data")
     matched_count = fields.Integer(string="Matched Products")
     missing_count = fields.Integer(string="Missing Products")
     missing_products = fields.Text(string="Missing Products List")
@@ -54,7 +63,6 @@ class BookingBomImportWizard(models.TransientModel):
         if not self.file:
             raise UserError(_("Please upload an Excel file."))
         
-        import base64
         file_content = base64.b64decode(self.file)
         
         # Parse and aggregate rows
@@ -71,12 +79,8 @@ class BookingBomImportWizard(models.TransientModel):
         for row in aggregated_rows:
             part_number = row['part_number']
             
-            # Search by name (case-insensitive)
+            # Search by name (case-insensitive exact match first)
             product = Product.search([('name', '=ilike', part_number)], limit=1)
-            
-            if not product:
-                # Try partial match on name
-                product = Product.search([('name', 'ilike', part_number)], limit=1)
             
             if not product:
                 # Try by default_code
@@ -90,17 +94,23 @@ class BookingBomImportWizard(models.TransientModel):
                     'quantity': row['quantity'],
                 })
             else:
-                missing.append(part_number)
+                missing.append({
+                    'part_number': part_number,
+                    'quantity': row['quantity'],
+                    'description': row.get('description', ''),
+                    'weight_kg': row.get('weight_kg', 0),
+                    'image_base64': row.get('image_base64', False),
+                })
         
         # Store results
-        import json
         self.preview_data = json.dumps(matched)
+        self.missing_data = json.dumps(missing)
         self.matched_count = len(matched)
         self.missing_count = len(missing)
-        self.missing_products = '\n'.join(missing) if missing else ''
+        self.missing_products = '\n'.join([m['part_number'] for m in missing]) if missing else ''
         
         if duplicates:
-            dup_warnings = [f"• {d['part_number']}: förekommer {d['occurrences']} gånger → summerad kvantitet: {d['total_qty']}" 
+            dup_warnings = [f"• {d['part_number']}: {d['occurrences']}x → total: {d['total_qty']}" 
                           for d in duplicates]
             self.duplicates_warning = '\n'.join(dup_warnings)
         else:
@@ -117,17 +127,14 @@ class BookingBomImportWizard(models.TransientModel):
         }
 
     def action_import(self):
-        """Import matched products as booking lines."""
+        """Import matched products as booking lines, optionally creating missing products."""
         self.ensure_one()
         
         if not self.preview_data:
             raise UserError(_("Please preview the file first."))
         
-        import json
         matched = json.loads(self.preview_data)
-        
-        if not matched:
-            raise UserError(_("No products matched. Nothing to import."))
+        missing = json.loads(self.missing_data) if self.missing_data else []
         
         booking = self.booking_id
         
@@ -135,33 +142,60 @@ class BookingBomImportWizard(models.TransientModel):
         if self.replace_existing:
             booking.line_ids.unlink()
         
-        # Create booking lines
         BookingLine = self.env['tl.rental.booking.line']
+        ProductTemplate = self.env['product.template']
         created_lines = []
+        created_products = []
         
+        # Create booking lines for matched products
         for item in matched:
-            vals = {
+            line = BookingLine.create({
                 'booking_id': booking.id,
                 'product_id': item['product_id'],
                 'quantity': item['quantity'],
-            }
-            # source_warehouse_id will be set by create() from booking header
-            line = BookingLine.create(vals)
+            })
             created_lines.append(line)
         
-        # Build result message
-        msg_parts = [
-            f"<p><strong>✅ Import complete!</strong></p>",
-            f"<p>Created {len(created_lines)} booking lines.</p>",
-        ]
+        # Handle missing products
+        if self.create_missing_products and missing:
+            for item in missing:
+                # Create product template (Odoo 19: type='consu' + is_storable=True for storable)
+                product_vals = {
+                    'name': item['part_number'],
+                    'is_storable': True,
+                    'weight': item.get('weight_kg', 0),
+                    'description': item.get('description', ''),
+                }
+                if item.get('image_base64'):
+                    product_vals['image_1920'] = item['image_base64']
+                
+                template = ProductTemplate.create(product_vals)
+                product = template.product_variant_id
+                created_products.append(template)
+                
+                # Create booking line for the new product
+                line = BookingLine.create({
+                    'booking_id': booking.id,
+                    'product_id': product.id,
+                    'quantity': item['quantity'],
+                })
+                created_lines.append(line)
         
-        if self.missing_count > 0:
-            msg_parts.append(f"<p><strong>⚠️ {self.missing_count} products not found</strong> (see list below)</p>")
-            missing_list = self.missing_products.replace('\n', '<br/>')
-            msg_parts.append(f"<p style='color: #856404; background: #fff3cd; padding: 8px; border-radius: 4px;'>{missing_list}</p>")
+        # Build result message
+        msg_parts = [f"<p><strong>✅ Import klar!</strong></p>"]
+        msg_parts.append(f"<p>Skapade <strong>{len(created_lines)}</strong> booking-rader.</p>")
+        
+        if created_products:
+            msg_parts.append(f"<p>Skapade <strong>{len(created_products)}</strong> nya produkter:</p>")
+            product_names = [p.name for p in created_products]
+            msg_parts.append(f"<ul>{''.join(f'<li>{n}</li>' for n in product_names)}</ul>")
+        
+        skipped = len(missing) - len(created_products) if missing else 0
+        if skipped > 0:
+            msg_parts.append(f"<p><strong>⚠️ {skipped} produkter hoppades över</strong> (fanns ej, skapades ej)</p>")
         
         if self.duplicates_warning:
-            msg_parts.append(f"<p><strong>ℹ️ Duplicates were aggregated:</strong></p>")
+            msg_parts.append(f"<p><strong>ℹ️ Dubbletter summerades:</strong></p>")
             dup_list = self.duplicates_warning.replace('\n', '<br/>')
             msg_parts.append(f"<p style='color: #0c5460; background: #d1ecf1; padding: 8px; border-radius: 4px;'>{dup_list}</p>")
         
