@@ -45,8 +45,8 @@ class TlRentalBooking(models.Model):
     
     state = fields.Selection([
         ('draft', 'Draft'),
+        ('planned', 'Planned'),
         ('reserved', 'Reserved'),
-        ('booked', 'Booked'),
         ('ongoing', 'Ongoing'),
         ('finished', 'Finished'),
         ('returned', 'Returned'),
@@ -84,14 +84,14 @@ class TlRentalBooking(models.Model):
                 if not line.source_warehouse_id:
                     raise ValidationError(_("Each line must have a Source Warehouse set."))
 
-            # Reserved is a soft hold - no picking created yet, no hard availability check
-            booking.state = 'reserved'
+            # Planned is a soft hold - no picking created yet, blocks availability for planning
+            booking.state = 'planned'
 
-    def action_book(self):
-        """Lock booking: reserved -> booked (hard commitment, creates pickings)."""
+    def action_reserve(self):
+        """Reserve booking: planned -> reserved (hard commitment, creates pickings)."""
         for booking in self:
-            if booking.state != 'reserved':
-                raise ValidationError(_("Only reserved bookings can be locked."))
+            if booking.state != 'planned':
+                raise ValidationError(_("Only planned bookings can be reserved."))
             
             # Hard availability check - this is the commitment point
             for line in booking.line_ids:
@@ -100,13 +100,13 @@ class TlRentalBooking(models.Model):
             # Create outbound and return pickings
             booking._create_start_picking()
             booking._create_return_picking()
-            booking.state = 'booked'
+            booking.state = 'reserved'
 
     def action_mark_ongoing(self):
-        """Mark as ongoing: booked -> ongoing (items physically out)."""
+        """Mark as ongoing: reserved -> ongoing (items physically out)."""
         for booking in self:
-            if booking.state != 'booked':
-                raise ValidationError(_("Only booked bookings can be marked as ongoing."))
+            if booking.state != 'reserved':
+                raise ValidationError(_("Only reserved bookings can be marked as ongoing."))
             booking.state = 'ongoing'
 
     def action_finish(self):
@@ -191,7 +191,7 @@ class TlRentalBooking(models.Model):
         # Bookings starting today
         starting_today = self.search_count([
             ('company_id', '=', company.id),
-            ('state', '=', 'reserved'),
+            ('state', 'in', ['planned', 'reserved']),
             ('date_start', '>=', today_start),
             ('date_start', '<', today_start + timedelta(days=1)),
         ])
@@ -199,7 +199,7 @@ class TlRentalBooking(models.Model):
         # Bookings ending today (need return)
         ending_today = self.search_count([
             ('company_id', '=', company.id),
-            ('state', 'in', ['reserved', 'ongoing']),
+            ('state', 'in', ['planned', 'reserved', 'ongoing']),
             ('date_end', '>=', today_start),
             ('date_end', '<', today_start + timedelta(days=1)),
         ])
@@ -207,7 +207,7 @@ class TlRentalBooking(models.Model):
         # Overdue bookings (past end date, not returned)
         overdue = self.search_count([
             ('company_id', '=', company.id),
-            ('state', 'in', ['reserved', 'ongoing', 'finished']),
+            ('state', 'in', ['planned', 'reserved', 'ongoing', 'finished']),
             ('date_end', '<', now),
         ])
         
@@ -520,11 +520,12 @@ class TlRentalBookingLine(models.Model):
     def _check_line_availability(self):
         """Check if the requested quantity exceeds available capacity.
         
-        Uses fleet capacity minus overlapping hard commitments (booked, ongoing, finished)
+        Uses fleet capacity minus overlapping commitments (reserved, booked, ongoing, finished)
         plus incoming returns to the source warehouse before the booking starts.
         
         Formula:
             available = fleet_capacity
+                      - reserved overlapping
                       - booked overlapping
                       - ongoing overlapping  
                       - finished overlapping
@@ -560,12 +561,12 @@ class TlRentalBookingLine(models.Model):
                     "Please set the Fleet Capacity on the product."
                 ) % product.display_name)
 
-            # Find overlapping hard commitments (booked, ongoing, finished)
+            # Find overlapping commitments (planned, reserved, ongoing, finished)
             domain = [
                 ('id', '!=', line.id),
                 ('product_id', '=', product.id),
                 ('company_id', '=', company.id if company else False),
-                ('state', 'in', ['booked', 'ongoing', 'finished']),
+                ('state', 'in', ['planned', 'reserved', 'ongoing', 'finished']),
                 ('date_start', '<', line.date_end),
                 ('date_end', '>', line.date_start),
             ]
@@ -606,9 +607,9 @@ class TlRentalBookingLine(models.Model):
 
     @api.constrains('product_id', 'date_start', 'date_end', 'state', 'company_id', 'quantity')
     def _constrains_check_availability(self):
-        """Only check availability for hard commitments (booked, ongoing, finished)."""
+        """Check availability for all planning commitments (planned, reserved, ongoing, finished)."""
         for line in self:
-            if line.state in ['booked', 'ongoing', 'finished']:
+            if line.state in ['planned', 'reserved', 'ongoing', 'finished']:
                 line._check_line_availability()
 
     @api.model
@@ -692,8 +693,8 @@ class TlRentalBookingLine(models.Model):
     def _get_committed_by_product_week(self, product_ids, weeks, warehouse_id, company):
         """Compute committed quantities per product and week from booking lines.
         
-        Counts hard commitments: booked, ongoing, finished states.
-        Reserved state is NOT counted (soft hold in optimistic mode).
+        Counts all planning commitments: reserved, booked, ongoing, finished states.
+        Reserved blocks availability for planning purposes (no double-booking).
         
         :param product_ids: list of product.product ids
         :param weeks: list of week dicts from _compute_weeks
@@ -708,11 +709,11 @@ class TlRentalBookingLine(models.Model):
         overall_start_dt = weeks[0]['start_dt']
         overall_end_dt = weeks[-1]['end_dt']
 
-        # Hard commitments: booked, ongoing, finished
+        # All planning commitments: planned, reserved, ongoing, finished
         domain = [
             ('product_id', 'in', product_ids),
             ('company_id', '=', company.id),
-            ('state', 'in', ['booked', 'ongoing', 'finished']),
+            ('state', 'in', ['planned', 'reserved', 'ongoing', 'finished']),
             ('date_start', '<', fields.Datetime.to_string(overall_end_dt)),
             ('date_end', '>', fields.Datetime.to_string(overall_start_dt)),
         ]

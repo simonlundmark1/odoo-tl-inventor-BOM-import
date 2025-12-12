@@ -225,9 +225,9 @@
                                             <i class="fa fa-calendar me-1"/>
                                             Check Availability
                                         </button>
-                                        <button class="btn btn-outline-info" t-on-click="() => this.openBookingsByState('reserved')">
+                                        <button class="btn btn-outline-info" t-on-click="() => this.openBookingsByState('planned')">
                                             <i class="fa fa-bookmark me-1"/>
-                                            Reserved Bookings
+                                            Planned Bookings
                                         </button>
                                         <button class="btn btn-outline-warning" t-on-click="() => this.openBookingsByState('ongoing')">
                                             <i class="fa fa-play me-1"/>

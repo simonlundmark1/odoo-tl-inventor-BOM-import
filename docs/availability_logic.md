@@ -9,13 +9,15 @@ This allows unlimited reservations while ensuring hard commitments don't exceed 
 
 ### Fleet Capacity
 - **Definition:** Total units owned for rental, regardless of current physical location
-- **Field:** `product.template.tlrm_fleet_capacity`
+- **Field:** `product.template.tlrm_fleet_capacity` (computed)
+- **Source:** Auto-computed from `stock.quant` quantities across all internal locations in the company
 - **Purpose:** Provides a stable base for availability calculations even when items are out on rental
+- **Note:** When you add inventory in any warehouse, fleet capacity automatically updates
 
-### Optimistic Booking
-- **Reserved state:** Soft hold - does NOT block availability
-- **Booked state:** Hard lock - DOES block availability
-- **Benefit:** Sales can overbook at reservation level; operations confirms real availability before locking
+### Planning vs Physical Commitment
+- **Reserved state:** Blocks availability for planning - prevents double-booking, but no stock movements
+- **Booked state:** Hard lock with stock movements - creates outbound and return pickings
+- **Benefit:** Reserved enables planning without physical inventory changes; Booked commits the physical items
 
 ## State Machine
 
@@ -24,13 +26,13 @@ This allows unlimited reservations while ensuring hard commitments don't exceed 
 │                         BOOKING STATE MACHINE                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  DRAFT ──► RESERVED ──► BOOKED ──► ONGOING ──► FINISHED ──► RETURNED        │
-│    │          │           │          │           │            │              │
-│    ▼          ▼           ▼          ▼           ▼            ▼              │
+│  DRAFT ──► PLANNED ──► RESERVED ──► ONGOING ──► FINISHED ──► RETURNED       │
+│    │          │           │           │           │            │             │
+│    ▼          ▼           ▼           ▼           ▼            ▼             │
 │                                                                              │
-│  Planning   Soft hold   Hard lock   Out on     Past end    Complete         │
-│  No impact  (can be     (picking    rental     date, not   Stock            │
-│             overbooked) created)    (physical) yet back    returned         │
+│  Planning   Blocks     Hard lock    Out on     Past end    Complete         │
+│  No impact  availab.   (picking     rental     date, not   Stock            │
+│             for plan   created)     (physical) yet back    returned         │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -38,8 +40,8 @@ This allows unlimited reservations while ensuring hard commitments don't exceed 
 | State | Blocks Availability? | Picking Status | Can Cancel? |
 |-------|---------------------|----------------|-------------|
 | draft | No | None | Yes |
-| reserved | **No** (optimistic) | None | Yes |
-| booked | **Yes** | Outbound + Return created | Yes (releases stock) |
+| planned | **Yes** (planning) | None | Yes |
+| reserved | **Yes** (physical) | Outbound + Return created | Yes (releases stock) |
 | ongoing | **Yes** | Outbound done | No |
 | finished | **Yes** | Return ready | No |
 | returned | No | Return done | N/A |
@@ -49,7 +51,8 @@ This allows unlimited reservations while ensuring hard commitments don't exceed 
 ```
 available_for_period(product, warehouse, start, end) = 
     fleet_capacity
-    - SUM(booked lines overlapping period)
+    - SUM(planned lines overlapping period)
+    - SUM(reserved lines overlapping period)
     - SUM(ongoing lines overlapping period)
     - SUM(finished lines overlapping period)
     + SUM(incoming returns before period starts)
@@ -65,14 +68,14 @@ available_for_period(product, warehouse, start, end) =
 │   Fleet Capacity (e.g., 10 projectors)                                       │
 │   ════════════════════════════════════════════════════                      │
 │                                                                              │
-│   [----- booked -----][----- ongoing -----][----- finished -----]           │
+│   [--- planned ---][--- reserved ---][----- ongoing -----][-finished-]      │
 │                                                                              │
 │   [+ incoming returns to this warehouse before period]                       │
 │                                                                              │
 │   ═══════════════════════════════════════════════════                       │
 │   [                    AVAILABLE                      ]                      │
 │                                                                              │
-│   Note: 'reserved' is shown for info but does NOT reduce available          │
+│   Note: All states except 'draft' and 'returned' reduce availability        │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

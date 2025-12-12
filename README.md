@@ -36,6 +36,8 @@ tl_rental_manager/
 │   ├── rental_cron.xml             # Cron: _cron_notify_booking_status
 │   ├── rental_sequence.xml         # Sequence: TLRM/xxxxx
 │   └── stock_warehouse_data.xml    # Creates rental locations for existing warehouses
+├── docs/
+│   └── availability_logic.md       # Detailed availability calculation docs
 ├── models/
 │   ├── __init__.py
 │   ├── product.py                  # product.template extensions (tlrm_* fields)
@@ -59,6 +61,9 @@ tl_rental_manager/
 │       └── xml/
 │           ├── booking_availability_wizard_templates.xml
 │           └── rental_availability_templates.xml
+├── tests/
+│   ├── __init__.py
+│   └── test_rental_availability.py # 22 test cases for availability logic
 └── views/
     ├── product_view.xml
     └── rental_booking_views.xml
@@ -93,7 +98,7 @@ Stock users automatically inherit TL Rental User permissions.
 
 ### product.template (extension)
 
-- `tlrm_fleet_capacity`: Total units owned for rental (used for availability calculations)
+- `tlrm_fleet_capacity`: Auto-computed from stock.quant across all warehouses (read-only)
 - `tlrm_available_units`: Computed available units (fleet - booked - rented)
 - `tlrm_booked_units`: Units locked for pickup
 - `tlrm_reserved_units`: Units in soft-hold reservations
@@ -202,6 +207,47 @@ This module uses Odoo 19 patterns. See `Odoo 19.md` for important technical note
 
 - Odoo 19.0 Community
 - Core modules: `base`, `product`, `stock`, `project`, `mail`
+
+## Tests
+
+The module includes comprehensive tests in `tests/test_rental_availability.py`:
+
+### Running Tests
+
+```bash
+# Run all module tests
+python odoo-bin -c odoo.conf -d <database> --test-enable -i tl_rental_manager --stop-after-init
+
+# Run specific test class
+python odoo-bin -c odoo.conf -d <database> --test-tags=/tl_rental_manager:TestRentalAvailability --stop-after-init
+```
+
+### Test Coverage (22 tests)
+
+| Test | Description |
+|------|-------------|
+| `test_01` | Confirm creates soft reservation |
+| `test_02` | Book within capacity succeeds |
+| `test_03` | Book over capacity fails |
+| `test_04` | Reserved does NOT block availability |
+| `test_05` | Booked state blocks availability |
+| `test_06` | Non-overlapping bookings independent |
+| `test_07` | Availability grid returns data |
+| `test_08` | Booked shows as committed in grid |
+| `test_09` | Reserved NOT in committed |
+| `test_10` | No fleet capacity fails booking |
+| `test_11` | Incoming returns add to availability |
+| `test_12` | Full state machine transitions |
+| `test_13` | Invalid state transitions fail |
+| `test_14` | Missing dates validation |
+| `test_15` | Start after end validation |
+| `test_16` | Cancel releases availability |
+| `test_17` | Ongoing/finished block availability |
+| `test_18` | Boundary dates (end = next start) |
+| `test_19` | Partial overlap counting |
+| `test_20` | Dashboard data structure |
+| `test_21` | Grid with multiple products |
+| `test_22` | Booking creates pickings |
 
 ## License
 

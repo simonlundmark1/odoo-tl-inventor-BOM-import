@@ -20,16 +20,16 @@
                     </group>
                     <group string="Availability">
                         <group>
-                            <field name="tlrm_fleet_capacity"/>
+                            <field name="tlrm_fleet_capacity" widget="integer" help="Auto-computed from total stock across all warehouses"/>
                             <field name="tlrm_status" widget="badge" 
                                 decoration-success="tlrm_status == 'available'"
-                                decoration-warning="tlrm_status == 'reserved'"
+                                decoration-warning="tlrm_status == 'planned'"
                                 decoration-danger="tlrm_status == 'rented'"
                                 decoration-muted="tlrm_status == 'unavailable'"/>
                         </group>
                         <group>
                             <field name="tlrm_available_units"/>
-                            <field name="tlrm_booked_units"/>
+                            <field name="tlrm_planned_units"/>
                             <field name="tlrm_reserved_units"/>
                             <field name="tlrm_rented_units"/>
                         </group>
