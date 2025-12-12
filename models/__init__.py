@@ -1,4 +1,1 @@
-from . import product
-from . import rental_booking
-from . import stock_picking
-from . import stock_warehouse
+# from . import rental_booking  # Requires tl_rental_manager

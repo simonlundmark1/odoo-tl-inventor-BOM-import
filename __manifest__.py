@@ -1,34 +1,33 @@
 {
-    "name": "TL Rental Manager",
-    "summary": "Manage stockable product rentals and project bookings with availability and calendar planning",
-    "version": "19.0.1.0.0",
-    "author": "simonlundmark1",
-    "website": "https://github.com/simonlundmark1",
-    "category": "Inventory",
-    "depends": ["base", "product", "stock", "project", "mail"],
-    "data": [
-        "security/rental_security.xml",
-        "security/ir.model.access.csv",
-        "data/rental_sequence.xml",
-        "data/rental_cron.xml",
-        "data/stock_warehouse_data.xml",
-        "views/product_view.xml",
-        "views/rental_booking_views.xml",
+    'name': 'TL Inventor BOM Import',
+    'version': '19.0.1.0.0',
+    'category': 'Inventory',
+    'summary': 'Import Bill of Materials from Autodesk Inventor',
+    'description': """
+        Import BOM data from Autodesk Inventor export files.
+        
+        Features:
+        - Import products from Inventor BOM Excel exports
+        - Import BOM to booking lines in TL Rental Manager
+        - Automatic weight parsing (kg)
+        - Duplicate detection and aggregation
+        
+        Requirements:
+        - openpyxl library (pip install openpyxl)
+    """,
+    'author': 'simonlundmark1',
+    'website': 'https://github.com/simonlundmark1',
+    'license': 'LGPL-3',
+    'depends': [
+        'base',
+        'stock',
+        'product',
     ],
-    "assets": {
-        "web.assets_backend": [
-            "tl_rental_manager/static/src/css/rental_availability.css",
-            "tl_rental_manager/static/src/js/rental_calendar.js",
-            "tl_rental_manager/static/src/js/rental_availability_action.js",
-            "tl_rental_manager/static/src/js/booking_availability_wizard.js",
-            "tl_rental_manager/static/src/js/booking_availability_action.js",
-            "tl_rental_manager/static/src/js/rental_dashboard.js",
-            "tl_rental_manager/static/src/xml/rental_availability_templates.xml",
-            "tl_rental_manager/static/src/xml/booking_availability_wizard_templates.xml",
-            "tl_rental_manager/static/src/xml/rental_dashboard_templates.xml",
-        ],
-    },
-    "application": True,
-    "installable": True,
-    "license": "LGPL-3",
+    'data': [
+        'security/ir.model.access.csv',
+        'views/wizard_views.xml',
+    ],
+    'installable': True,
+    'application': False,
+    'auto_install': False,
 }

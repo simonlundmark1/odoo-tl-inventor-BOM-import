@@ -1,5 +1,2 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-tlrm_access_booking_user,tl.rental.booking.user,model_tl_rental_booking,tl_rental_manager.tlrm_group_user,1,1,1,0
-tlrm_access_booking_manager,tl.rental.booking.manager,model_tl_rental_booking,tl_rental_manager.tlrm_group_manager,1,1,1,1
-tlrm_access_booking_line_user,tl.rental.booking.line.user,model_tl_rental_booking_line,tl_rental_manager.tlrm_group_user,1,1,1,0
-tlrm_access_booking_line_manager,tl.rental.booking.line.manager,model_tl_rental_booking_line,tl_rental_manager.tlrm_group_manager,1,1,1,1
+access_product_import_wizard_user,access_product_import_wizard_user,model_tl_inventor_product_import_wizard,stock.group_stock_user,1,1,1,1

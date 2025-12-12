@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit Booking Form to add Import BOM button above Lines list -->
+    <record id="tlrm_view_booking_form_inherit_bom_import" model="ir.ui.view">
+        <field name="name">tl.rental.booking.form.inherit.bom.import</field>
+        <field name="model">tl.rental.booking</field>
+        <field name="inherit_id" ref="tl_rental_manager.tlrm_view_booking_form"/>
+        <field name="arch" type="xml">
+            <!-- Add Import BOM button above the lines list in the Lines page -->
+            <xpath expr="//page[@string='Lines']/field[@name='line_ids']" position="before">
+                <div class="mb-2">
+                    <button name="action_open_bom_import_wizard" 
+                            string="📥 Import BOM" 
+                            type="object" 
+                            class="btn-secondary"
+                            invisible="state != 'draft'"
+                            title="Import products from Inventor BOM Excel file"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
